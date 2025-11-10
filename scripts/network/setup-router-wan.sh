@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Script para mostrar instrucciones detalladas de configuración WAN
+# Ejecutar en Orange Pi master
+
+echo "=== INSTRUCCIONES PARA CONFIGURACIÓN WAN ==="
+echo ""
+echo "PASO 1: Verificar IP WAN real"
+echo "=================================="
+echo "Tu IP WAN real es:"
+curl -s https://api.ipify.org
+echo ""
+echo "IMPORTANTE: Esta IP puede ser diferente a la que muestra cual-es-mi-ip.net"
+echo ""
+
+echo "PASO 2: Configurar Port Forwarding en Router"
+echo "=============================================="
+echo "Accede a la interfaz web de tu router (generalmente 192.168.1.1)"
+echo "Busca la sección 'Port Forwarding', 'NAT', o 'Virtual Server'"
+echo ""
+echo "Configuraciones necesarias:"
+echo ""
+echo "Regla 1 - Keycloak:"
+echo "  Puerto externo: 8080"
+echo "  IP interna: 192.168.1.200"
+echo "  Puerto interno: 8080"
+echo "  Protocolo: TCP"
+echo ""
+echo "Regla 2 - PostgreSQL:"
+echo "  Puerto externo: 5432"
+echo "  IP interna: 192.168.1.200"
+echo "  Puerto interno: 5432"
+echo "  Protocolo: TCP"
+echo ""
+
+echo "PASO 3: Verificar configuración"
+echo "================================="
+echo "Después de configurar el router, ejecuta:"
+echo "  /root/diagnose-wan.sh"
+echo ""
+echo "O prueba manualmente desde otro dispositivo:"
+echo "  curl http://TU-IP-WAN:8080"
+echo ""
+
+echo "PASO 4: Problemas comunes"
+echo "============================"
+echo "• ISP bloquea puertos: Prueba 8081/5433 en lugar de 8080/5432"
+echo "• Doble NAT: Configura port forwarding en router ISP + router local"
+echo "• Firewall: Desactiva temporalmente firewall del router"
+echo "• IP dinámica: Considera DDNS si tu IP cambia frecuentemente"
+echo ""
+
+echo "PASO 5: Testing desde internet"
+echo "================================="
+echo "Una vez configurado, accede desde cualquier dispositivo:"
+echo "• Keycloak: http://TU-IP-WAN:8080"
+echo "• PostgreSQL: TU-IP-WAN:5432 (desde DBeaver, etc.)"
+echo ""
+
+echo "=== FIN DE INSTRUCCIONES ==="
