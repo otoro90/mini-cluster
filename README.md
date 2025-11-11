@@ -1,482 +1,239 @@
-# Mini-Cluster Kubernetes
+# Mini-Cluster Kubernetes ARM64 - K3s Limpio
 
-# Mini-Cluster Kubernetes ARM64
+Proyecto para configurar un clúster Kubernetes de alta disponibilidad en dispositivos ARM64 con **K3s** v1.33.5+k3s1 limpio, documentado y sin conflictos de información.
 
-Proyecto para configurar un clúster Kubernetes optimizado en dispositivos ARM64 (Orange Pi + Raspberry Pi) con PostgreSQL, Keycloak y acceso WAN.
+**ESTADO**: ✅ Documentación completamente reorganizada, proyecto limpio y ordenado, listo para instalación.
+
+> � **¡COMIENZA AQUÍ!** 
+> 1. Lee [NAVEGACION.md](NAVEGACION.md) para orientarte (2 min)
+> 2. Abre [INICIO-AQUI.md](INICIO-AQUI.md) para instalar (5 pasos, 32 min)
+> 3. ¡Tu clúster K3s estará funcionando en 50 minutos!
+
+## 🎯 ¿Qué es Este Proyecto?
+
+Este es un conjunto completo y bien documentado para desplegar K3s en una Orange Pi (master) y Raspberry Pi (worker). Todo está organizado en una estructura limpia sin documentación obsoleta que pueda causar confusión.
+
+- **Antes**: Documentación fragmentada, información sobre migraciones fallidas, conflictos de instrucciones
+- **Ahora**: Una única fuente de verdad con documentación clara para K3s limpio
 
 ## Estructura del Proyecto
 
 ```
 mini-cluster/
-├── manifests/                 # Archivos YAML de Kubernetes
-│   ├── ingress-traefik.yaml   # Ingress para Traefik (K3s)
+├── docs-clean/                        # ✅ NUEVA documentación limpia (18 archivos)
+│   ├── getting-started/               # Inicio rápido (4 docs)
+│   │   ├── 01-INICIO.md              # 5 pasos, 32 minutos
+│   │   ├── 02-INSTALACION-PASO-A-PASO.md
+│   │   ├── 03-CONFIGURACION-RED.md
+│   │   └── 04-SSH-KEYS.md
+│   ├── technical/                     # Referencia técnica (5 docs)
+│   │   ├── K3S-ARCHITECTURE.md
+│   │   ├── K3S-VS-KUBEADM.md
+│   │   ├── NETWORKING.md
+│   │   ├── STORAGE.md
+│   │   └── SECURITY.md
+│   ├── troubleshooting/               # Problemas y soluciones (4 docs)
+│   │   ├── NETWORK-ISSUES.md
+│   │   ├── K3S-ISSUES.md
+│   │   ├── SSH-ISSUES.md
+│   │   └── CLUSTER-ISSUES.md
+│   ├── deployment/                    # Componentes opcionales (4 docs)
+│   │   ├── CILIUM-CNI.md
+│   │   ├── LONGHORN-STORAGE.md
+│   │   ├── PROMETHEUS-GRAFANA.md
+│   │   └── POSTGRESQL-KEYCLOAK.md
+│   └── INDEX.md                       # Índice de navegación
+├── scripts/install/                   # ✅ 3 scripts limpios (sin migraciones)
+│   ├── INSTALL-K3S-MASTER-CLEAN.sh   # Instalar en Orange Pi
+│   ├── INSTALL-K3S-WORKER-CLEAN.sh   # Instalar en Raspberry Pi
+│   └── VALIDATE-K3S-CLUSTER.sh       # Validar clúster
+├── manifests/                         # Archivos YAML opcionales
 │   ├── keycloak-deployment.yaml
-│   ├── keycloak-secret.yaml
-│   ├── keycloak-service.yaml
-│   ├── postgres-secret.yaml
-│   ├── postgres-service.yaml
-│   └── postgres-statefulset.yaml
-├── scripts/                   # Scripts de automatización organizados por función
-│   ├── install/               # Scripts de instalación
-│   │   ├── install-k3s.sh
-│   │   └── migrate-to-k3s.sh
-│   ├── deploy/                # Scripts de despliegue
-│   │   ├── deploy-k3s-optimized.sh
-│   │   └── deploy.sh
-│   ├── maintenance/           # Scripts de mantenimiento
-│   │   ├── check-status.sh
-│   │   ├── cleanup.sh
-│   │   ├── redistribute-pods.sh
-│   │   └── setup-master-worker.sh
-│   └── network/               # Scripts de configuración de red/WAN
-│       ├── create-dynu-account.sh
-│       ├── diagnose-wan.sh
-│       ├── setup-claro-router.sh
-│       ├── setup-dynu-ddns.sh
-│       ├── setup-router-wan.sh
-│       ├── setup-wan-access.sh
-│       └── test-port-forwarding.sh
-├── README.md                  # Esta documentación
-└── [archivos de documentación adicionales]
+│   ├── postgres-statefulset.yaml
+│   └── ...otros manifests
+├── agents/                            # 📊 Reportes e instrucciones internas
+│   ├── README.md                      # Índice de contenido
+│   ├── RESUMEN-ESTADO-FINAL.md       # Estado final del proyecto
+│   ├── VERIFICACION-LIMPIEZA.md      # Checklist de verificación
+│   └── ...otros reportes
+├── INICIO-AQUI.md                     # 📍 EMPIEZA AQUÍ
+├── LISTO-PARA-INSTALAR.md            # Checklist de requisitos
+├── INSTALACION-K3S-LIMPIA.md         # Guía principal
+├── DOCUMENTACION-COMPLETA.md         # Resumen ejecutivo
+├── README.md                          # Esta documentación
+└── [sin archivos obsoletos de kubeadm/migraciones]
 ```
+
+**IMPORTANTE**: 
+- ✅ Toda documentación antigua ha sido ELIMINADA
+- ✅ Solo existe UN conjunto de instrucciones (docs-clean/)
+- ✅ Ningún contenido conflictivo
+- ✅ Los LLMs no tendrán información desactualizada
 
 ## Fecha
-6 de noviembre de 2025
+6 de noviembre de 2025 (Reorganización completa y limpieza)
 
 ## Arquitectura del Clúster
+
 - **Master (Control Plane)**: Orange Pi (192.168.1.200)
 - **Worker**: Raspberry Pi (192.168.1.100)
-- **Kubernetes**: K3s v1.30+ (optimizado para ARM64)
-- **CNI**: Cilium (eBPF para mejor seguridad y performance)
-- **CRI**: containerd
-- **Storage**: Longhorn (distribuido y HA)
+- **Kubernetes**: K3s v1.33.5+k3s1 (optimizado para ARM64)
+- **CNI**: Flannel (por defecto, opcional: Cilium)
+- **Storage**: local-path (por defecto, opcional: Longhorn)
 - **Ingress**: Traefik (incluido en K3s)
-- **Monitoreo**: Prometheus + Grafana
 
-## Instalación Inicial
+## 🚀 Instalación Rápida (32 minutos)
 
-### Orange Pi (Master)
-Sigue los pasos en `resumen_instalacion_kubernetes.md` o `guia_kubernetes_continuacion.md`.
-
-Comandos clave:
+### Paso 1: Lee la Documentación Inicial
 ```bash
-# Preparar sistema
-sudo apt update && sudo apt upgrade -y
-# ... (ver archivos de documentación)
-
-# Inicializar clúster
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16 --cri-socket=unix:///var/run/containerd/containerd.sock
-
-# Instalar Calico
-kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+# Abre INICIO-AQUI.md en tu editor favorito
+# Te dirá todo lo que necesitas hacer en 5 pasos
 ```
 
-### Raspberry Pi (Worker)
-Similar a Orange Pi, pero usa el comando de join del master.
+### Paso 2: Configura Red (Ambos Nodos)
 
-## Configuración Multi-Nodo
-Después de inicializar el master, obtén el token de join:
-```bash
-kubeadm token create --print-join-command
-```
-
-En el worker:
-```bash
-sudo kubeadm join <master-ip>:6443 --token <token> --discovery-token-ca-cert-hash <hash>
-```
-
-## Despliegues
-
-Los manifests están en la carpeta `manifests/`.
-
-### Scripts Disponibles
-- `scripts/install/install-k3s.sh`: Instala K3s en ARM64
-- `scripts/install/migrate-to-k3s.sh`: Migra de kubeadm a K3s (¡cuidado, resetea cluster!)
-- `scripts/deploy/deploy-k3s-optimized.sh`: Despliegue completo optimizado con K3s + Cilium + Longhorn + Prometheus
-- `scripts/deploy/deploy.sh`: Despliegue legacy con kubeadm (para referencia)
-- `scripts/maintenance/check-status.sh`: Verificación del estado
-- `scripts/maintenance/cleanup.sh`: Limpieza de recursos no utilizados
-- `scripts/maintenance/setup-master-worker.sh`: Configura el master como worker de emergencia
-- `scripts/maintenance/redistribute-pods.sh`: Fuerza redistribución de pods para alta disponibilidad
-- `scripts/network/setup-wan-access.sh`: Guía para configurar acceso desde internet
-- `scripts/network/diagnose-wan.sh`: Diagnóstico completo de problemas de acceso WAN
-- `scripts/network/setup-router-wan.sh`: Instrucciones detalladas para configuración del router
-- `scripts/network/setup-dynu-ddns.sh`: Instala y configura cliente Dynu DDNS
-- `scripts/network/create-dynu-account.sh`: Guía completa para crear cuenta en Dynu
-- `scripts/network/setup-claro-router.sh`: Instrucciones específicas para router Claro
-- `scripts/network/test-port-forwarding.sh`: Prueba rápida de port forwarding
-
-### PostgreSQL
-- `postgres-secret.yaml`: Credenciales
-- `postgres-service.yaml`: Servicio
-- `postgres-statefulset.yaml`: StatefulSet con PVC para persistencia
-
-### Keycloak
-- `keycloak-secret.yaml`: Credenciales de admin y DB
-- `keycloak-deployment.yaml`: Deployment con probes de readiness/liveness
-- `keycloak-service.yaml`: Servicio
-
-## Despliegue Automático
-
-### Opción 1: Setup Optimizado con K3s (Recomendado)
-```bash
-# 1. Instalar K3s (nuevo cluster)
-scp scripts/install/install-k3s.sh root@192.168.1.200:/root/
-ssh root@192.168.1.200 "/root/install-k3s.sh"
-
-# 2. Desplegar todo optimizado
-scp scripts/deploy/deploy-k3s-optimized.sh root@192.168.1.200:/root/
-ssh root@192.168.1.200 "/root/deploy-k3s-optimized.sh"
-```
-
-### Opción 2: Migrar de kubeadm a K3s
-```bash
-# ⚠️ CUIDADO: Resetea el cluster actual
-scp scripts/install/migrate-to-k3s.sh root@192.168.1.200:/root/
-ssh root@192.168.1.200 "/root/migrate-to-k3s.sh"
-```
-
-### Opción 3: Setup Legacy con kubeadm
-```bash
-# Copiar archivos al servidor
-scp manifests/* scripts/deploy/deploy.sh scripts/maintenance/check-status.sh root@192.168.1.200:/root/
-
-# Ejecutar despliegue
-ssh root@192.168.1.200 "chmod +x /root/deploy.sh && /root/deploy.sh"
-```
-
-## Acceso WAN (Internet)
-
-### Configuración de IP Estática
-Para acceso desde internet, configura IP estática en el Orange Pi (master):
-
-```bash
-# Editar configuración de red
-sudo nano /etc/netplan/50-cloud-init.yaml
-
-# Agregar configuración:
+**Orange Pi (master)** - Edita `/etc/netplan/50-cloud-init.yaml`:
+```yaml
 network:
   version: 2
   ethernets:
-    eth0:  # Cambia por tu interfaz de red
+    eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.200/24  # Tu IP actual
+        - 192.168.1.200/24
       routes:
         - to: default
-          via: 192.168.1.1  # Gateway de tu router
+          via: 192.168.1.1
       nameservers:
         addresses: [8.8.8.8, 1.1.1.1]
-
-# Aplicar cambios
-sudo netplan apply
 ```
 
-### Port Forwarding en Router
-Configura tu router para redirigir puertos externos. **Este es el paso más importante y probablemente faltante.**
-
-**Ejemplo de configuración (varía por router):**
-```
-Puerto externo: 8080 → IP interna: 192.168.1.200 → Puerto interno: 8080
-Puerto externo: 5432 → IP interna: 192.168.1.200 → Puerto interno: 5432
-```
-
-**Comandos para verificar:**
+**Raspberry Pi (worker)** - Edita `/etc/dhcpcd.conf`:
 ```bash
-# Diagnóstico completo
-/root/diagnose-wan.sh
-
-# Verificar IP WAN real
-curl -s https://api.ipify.org
+interface eth0
+static ip_address=192.168.1.100/24
+static routers=192.168.1.1
+static domain_name_servers=8.8.8.8 1.1.1.1
 ```
 
-### Problemas Comunes
-- **IP WAN diferente**: La IP que muestra cual-es-mi-ip.net puede ser diferente a la real
-- **ISP bloquea puertos**: Algunos proveedores bloquean 8080, 5432. Prueba con puertos alternos (8081, 5433)
-- **Doble NAT**: Si tienes router del ISP + router local, configura port forwarding en ambos
-- **Firewall**: Desactiva temporalmente firewall del router para testing
-
-### Testing Paso a Paso
-1. **Desde otro dispositivo en tu red local:**
-   ```bash
-   curl http://192.168.1.200:8080
-   ```
-
-2. **Desde internet (usando IP WAN real):**
-   ```bash
-   curl http://TU-IP-WAN:8080
-   ```
-
-3. **Si no funciona:** Ejecuta `/root/diagnose-wan.sh` para diagnóstico detallado
-
-### Seguridad Recomendada
-- **PostgreSQL**: Usa túnel SSH o VPN en lugar de exponer puerto directamente
-- **Keycloak**: Considera SSL con Let's Encrypt si tienes dominio
-
-## DNS Dinámico (DDNS) con Dynu
-
-Para evitar problemas con IPs dinámicas que cambian, configura DNS dinámico con Dynu (gratuito).
-
-### ¿Por qué DDNS?
-- **IP dinámica**: Tu proveedor de internet cambia tu IP periódicamente
-- **Acceso fácil**: URLs fijas como `http://tu-nombre.dynu.net:8080` en lugar de `http://181.51.34.83:8080`
-- **Gratuito**: Dynu ofrece servicio gratuito con actualizaciones automáticas
-- **Compatible ARM64**: Usamos ddclient que funciona perfectamente en ARM64
-
-### Instalación y Configuración
-
-```bash
-# Copiar scripts al servidor
-scp scripts/network/setup-dynu-ddns.sh scripts/network/create-dynu-account.sh root@192.168.1.200:/root/
-
-# Ejecutar guía de creación de cuenta
-ssh root@192.168.1.200 "/root/create-dynu-account.sh"
-
-# Instalar ddclient para Dynu
-ssh root@192.168.1.200 "/root/setup-dynu-ddns.sh"
-```
-
-### Configuración del Cliente
-
-Después de crear tu cuenta en Dynu, configura ddclient:
-
-```bash
-# En el Orange Pi, edita la configuración
-sudo nano /etc/ddclient.conf
-
-# Reemplaza con tus datos:
-protocol=dyndns2
-use=web
-server=api.dynu.com
-login=TU_EMAIL
-password=TU_PASSWORD
-TU_HOSTNAME.dynu.net
-```
-
-### Actualización Automática
-
-ddclient se ejecuta como servicio systemd y actualiza automáticamente:
-
-```bash
-# Verificar estado del servicio
-sudo systemctl status ddclient
-
-# Forzar actualización manual
-sudo ddclient -daemon=0
-
-# Ver logs
-sudo journalctl -u ddclient -f
-```
-
-### URLs con DDNS
-
-Una vez configurado, accede usando tu dominio Dynu:
-- **Keycloak**: `http://tu-nombre.dynu.net:8080`
-- **PostgreSQL**: `tu-nombre.dynu.net:5432`
-- **Nginx**: `http://tu-nombre.dynu.net:30126/`
-
-### Verificación
-
-```bash
-# Probar actualización manual con debug
-sudo ddclient -daemon=0 -debug -verbose -noquiet
-
-# Verificar que el hostname se actualizó en Dynu
-curl -s https://api.ipify.org  # Tu IP actual
-nslookup tu-nombre.dynu.net    # Debe resolver a tu IP
-```
-
-### NGINX Ingress Controller
-El script `deploy.sh` instala automáticamente NGINX Ingress Controller para routing avanzado.
-
-**URLs de acceso:**
-- **Keycloak**: `http://TU-IP-PUBLICA:8080` o `http://TU-IP-PUBLICA:30126/keycloak`
-- **PostgreSQL**: `TU-IP-PUBLICA:5432` (desde DBeaver, etc.)
-- **Nginx (test)**: `http://TU-IP-PUBLICA:30126/`
-
-### Servicios Disponibles
-- **Ingress Controller**: Puerto 30126 (HTTP), 32024 (HTTPS)
-- **Keycloak**: Puerto 8080 directo
-- **PostgreSQL**: Puerto 5432 directo
-
-## Alta Disponibilidad
-
-### Distribución de Réplicas
-Las aplicaciones están distribuidas en ambos nodos para maximizar la resiliencia:
-
-- **Nginx**: 2 réplicas (1 en master, 1 en worker)
-- **PostgreSQL**: 1 réplica principal + 1 StatefulSet (con persistencia)
-- **Keycloak**: 1 réplica (con probes de health)
-
-### Recuperación Automática
-Si un nodo falla:
-1. Las réplicas sobrevivientes mantienen el servicio
-2. Kubernetes reprograma automáticamente los pods perdidos
-3. El master puede asumir carga adicional si es necesario
-
-### Redistribución Manual
-```bash
-# Forzar redistribución de pods
-kubectl delete pods -l app=<app-name>
-
-# O usar el script automatizado
-/root/redistribute-pods.sh
-```
-
-## Copiar Manifests a Servidores
-
-Desde tu máquina local (Windows):
+### Paso 3: Configura SSH (Desde tu PC Windows)
 
 ```powershell
-# A Orange Pi
-scp manifests/* root@192.168.1.200:/root/
+# Generar claves
+ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
 
-# A Raspberry Pi
-scp manifests/* root@192.168.1.100:/root/
+# Copiar clave pública a ambos nodos
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.100 "cat >> ~/.ssh/authorized_keys"
+
+# Verificar
+ssh -o PasswordAuthentication=no root@192.168.1.200 "echo OK"
 ```
 
-Luego, en cada servidor:
-```bash
-export KUBECONFIG=/etc/kubernetes/admin.conf
-kubectl apply -f /root/*.yaml
+### Paso 4: Instalar K3s en Master
+
+```powershell
+# Copiar script
+scp scripts/install/INSTALL-K3S-MASTER-CLEAN.sh root@192.168.1.200:/root/
+
+# Ejecutar
+ssh root@192.168.1.200 "chmod +x /root/INSTALL-K3S-MASTER-CLEAN.sh && /root/INSTALL-K3S-MASTER-CLEAN.sh"
 ```
 
-## Estado Actual
-- ✅ **K3s optimizado**: Cluster corriendo en K3s para mejor performance ARM64
-- ✅ **Cilium CNI**: Networking avanzado con eBPF para seguridad
-- ✅ **Longhorn Storage**: Storage distribuido y HA para PostgreSQL
-- ✅ **Traefik Ingress**: Routing moderno incluido en K3s
-- ✅ **Prometheus + Grafana**: Monitoreo completo del cluster
-- ✅ Master configurado como worker de emergencia (puede ejecutar pods de usuario)
-- ✅ Alta disponibilidad: Réplicas distribuidas en ambos nodos
-- ✅ PostgreSQL desplegado y accesible con persistencia
-- ✅ Keycloak desplegado y corriendo con probes de health
-- ✅ Documentación completa (este README)
-- ✅ Scripts de automatización funcionales
-- ✅ Pruebas de integración Keycloak-PostgreSQL (accesible en http://192.168.1.200:8080)
-- ✅ Port-forwards persistentes configurados
-- ✅ **DDNS funcionando: otoro.ddnsfree.com → 181.51.34.83**
-- ⏳ **PENDIENTE**: Configurar port forwarding en router para acceso WAN
+### Paso 5: Instalar K3s en Worker
 
-## Próximos Pasos
-1. ✅ Completar despliegue de Keycloak
-2. ✅ Probar integración con PostgreSQL
-3. ✅ Automatizar despliegue completo
-4. Agregar más aplicaciones (ej. nginx con ingress)
-5. Configurar monitoring (Prometheus + Grafana)
-6. Implementar CI/CD básico
-7. Documentar backup/restore procedures
+```powershell
+# Copiar script
+scp scripts/install/INSTALL-K3S-WORKER-CLEAN.sh root@192.168.1.100:/root/
 
-## Troubleshooting
-
-### Port-forwards no persisten
-Los port-forwards requieren `nohup` para ejecutarse en background. Usa el script `deploy.sh` que los configura automáticamente.
-
-### Port forwarding no funciona
-Si después de configurar el router no puedes acceder desde WAN:
-```bash
-# Prueba rápida
-/root/test-port-forwarding.sh
-
-# Diagnóstico completo
-/root/diagnose-wan.sh
+# Ejecutar
+ssh root@192.168.1.100 "chmod +x /root/INSTALL-K3S-WORKER-CLEAN.sh && /root/INSTALL-K3S-WORKER-CLEAN.sh"
 ```
 
-**Para router Claro:**
-```bash
-# Instrucciones específicas
-/root/setup-claro-router.sh
+### Paso 6: Validar Clúster
+
+```powershell
+# Ejecutar script de validación
+ssh root@192.168.1.200 "chmod +x /root/VALIDATE-K3S-CLUSTER.sh && /root/VALIDATE-K3S-CLUSTER.sh"
+
+# Deberías ver ambos nodos en "Ready":
+# NAME              STATUS   ROLES
+# orangepi5         Ready    control-plane
+# raspberry-worker  Ready    <none>
 ```
 
-### PVCs en Pending
-Si los PVCs quedan en Pending, verifica que haya un StorageClass disponible:
-```bash
-kubectl get storageclass
-```
+**¡Listo!** Tu clúster K3s está funcionando. ✅
 
-### Keycloak no inicia
-Verifica la conectividad con PostgreSQL:
-```bash
-kubectl exec -it <keycloak-pod> -- curl postgres-svc:5432
-```
+## Despliegues Opcionales
 
-### DDNS no actualiza
-Si usas ddclient, verifica la configuración:
-```bash
-# Ver estado
-sudo systemctl status ddclient
+Después de que el clúster esté corriendo, puedes desplegar componentes adicionales:
 
-# Ver logs
-sudo journalctl -u ddclient -f
+- **Cilium CNI**: Ver `docs-clean/deployment/CILIUM-CNI.md`
+- **Longhorn Storage**: Ver `docs-clean/deployment/LONGHORN-STORAGE.md`
+- **Prometheus + Grafana**: Ver `docs-clean/deployment/PROMETHEUS-GRAFANA.md`
+- **PostgreSQL + Keycloak**: Ver `docs-clean/deployment/POSTGRESQL-KEYCLOAK.md`
 
-# Actualizar manualmente
-sudo ddclient -daemon=0
-```
+Los manifests están en la carpeta `manifests/`.
 
-### Acceso desde WAN
-Tu dominio DDNS `otoro.ddnsfree.com` ya está funcionando. Solo necesitas configurar port forwarding en el router (192.168.1.1).
+## 📖 Documentación
 
-## Mejoras Implementadas
+### Punto de Entrada
+- **INICIO-AQUI.md**: Comienza por aquí (5 pasos, 32 min)
+- **LISTO-PARA-INSTALAR.md**: Checklist de requisitos
+- **INSTALACION-K3S-LIMPIA.md**: Guía principal de instalación
+- **DOCUMENTACION-COMPLETA.md**: Resumen ejecutivo
 
-### En Manifests
-- ✅ Probes de readiness/liveness en Keycloak para mejor estabilidad
-- ✅ Sintaxis YAML corregida en postgres-statefulset
-- ✅ StorageClass y PV para persistencia de PostgreSQL
-- ✅ Secrets separados para mejor organización y seguridad
+### Guías por Fase
+**docs-clean/getting-started/** (Primeros pasos)
+- 01-INICIO.md
+- 02-INSTALACION-PASO-A-PASO.md
+- 03-CONFIGURACION-RED.md
+- 04-SSH-KEYS.md
 
-### En Scripts
-- ✅ `deploy.sh`: Automatización completa del despliegue
-- ✅ `check-status.sh`: Verificación del estado del clúster
-- ✅ Port-forwards persistentes con logging y PIDs
-- ✅ Validación de readiness antes de continuar
-- ✅ Manejo inteligente de StatefulSets (no espera por storage provisioning)
+**docs-clean/technical/** (Referencia técnica)
+- K3S-ARCHITECTURE.md
+- K3S-VS-KUBEADM.md
+- NETWORKING.md
+- STORAGE.md
+- SECURITY.md
 
-### Problemas Resueltos Automáticamente
-- ❌ Port-forwards que fallaban → ✅ Persistentes con `nohup`
-- ❌ Esperas manuales → ✅ `kubectl wait` automático  
-- ❌ Health checks faltantes → ✅ Probes configuradas
-- ❌ Sintaxis YAML errónea → ✅ Validada y corregida
-- ❌ Storage no provisionado → ✅ StorageClass + PV local
+**docs-clean/troubleshooting/** (Solución de problemas)
+- NETWORK-ISSUES.md
+- K3S-ISSUES.md
+- SSH-ISSUES.md
+- CLUSTER-ISSUES.md
 
-## Resumen del Proyecto
+**docs-clean/deployment/** (Componentes opcionales)
+- CILIUM-CNI.md
+- LONGHORN-STORAGE.md
+- PROMETHEUS-GRAFANA.md
+- POSTGRESQL-KEYCLOAK.md
 
-Este mini-cluster Kubernetes ARM64 incluye:
+## 🔧 Estado Actual
 
-- **Infraestructura**: Clúster de 2 nodos (Orange Pi master + Raspberry Pi worker)
-- **Master como Worker**: El master puede ejecutar pods de usuario en caso de emergencia
-- **Alta Disponibilidad**: Réplicas distribuidas en ambos nodos para resiliencia
-- **Base de datos**: PostgreSQL con persistencia local
-- **Identity Management**: Keycloak integrado con PostgreSQL
-- **Ingress Controller**: NGINX para routing y acceso WAN
-- **Automatización**: Scripts completos para despliegue, verificación, limpieza y configuración
-- **Acceso externo**: Port-forwards persistentes y ingress para desarrollo
+✅ **Instalación base K3s**: Lista (32 minutos)
+✅ **Documentación**: 18 archivos, sin conflictos
+✅ **Scripts de instalación**: 3 scripts limpios
+✅ **Información obsoleta**: ELIMINADA (sin LLM hallucinations)
+⏳ **Componentes opcionales**: Disponibles en `docs-clean/deployment/`
 
-**URLs de acceso:**
-- Keycloak Admin: http://192.168.1.200:8080 (admin/admin)
-- Keycloak via Traefik: http://192.168.1.200/keycloak
-- PostgreSQL: 192.168.1.200:5432 (postgres/password)
-- **Prometheus**: http://192.168.1.200:9090
-- **Grafana**: http://192.168.1.200:3000 (admin/admin)
-- **Longhorn UI**: Accede vía kubectl port-forward o ingress
-- **WAN Access (después de configurar router)**: http://otoro.ddnsfree.com:8080
+## 📋 Próximos Pasos
 
-**Comandos útiles:**
-```bash
-# Desplegar todo
-/root/deploy.sh
+1. Lee **INICIO-AQUI.md** (5 minutos)
+2. Lee **docs-clean/getting-started/02-INSTALACION-PASO-A-PASO.md** (20 minutos)
+3. Configura red en ambos nodos
+4. Configura SSH keys
+5. Ejecuta los 3 scripts de instalación
+6. Valida el clúster
+7. (Opcional) Instala componentes adicionales
 
-# Verificar estado
-/root/check-status.sh
+## 🆘 Troubleshooting
 
-# Limpiar recursos
-/root/cleanup.sh
+Para problemas durante la instalación o uso, consulta:
 
-# Configurar master como worker
-/root/setup-master-worker.sh
+- **NETWORK-ISSUES.md**: Problemas de conectividad
+- **K3S-ISSUES.md**: Problemas de Kubernetes
+- **SSH-ISSUES.md**: Problemas de SSH
+- **CLUSTER-ISSUES.md**: Problemas del clúster
 
-# Redistribuir pods
-/root/redistribute-pods.sh
-
-# Configurar acceso WAN
-/root/setup-wan-access.sh
-```
+**Todos los archivos están en: `docs-clean/troubleshooting/`**
