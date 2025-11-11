@@ -75,8 +75,8 @@ mini-cluster/
 
 ## Arquitectura del Clúster
 
-- **Master (Control Plane)**: Orange Pi (192.168.1.200)
-- **Worker**: Raspberry Pi (192.168.1.100)
+- **Master (Control Plane)**: Orange Pi (192.168.1.254)
+- **Worker**: Raspberry Pi (192.168.1.250)
 - **Kubernetes**: K3s v1.33.5+k3s1 (optimizado para ARM64)
 - **CNI**: Flannel (por defecto, opcional: Cilium)
 - **Storage**: local-path (por defecto, opcional: Longhorn)
@@ -100,7 +100,7 @@ network:
     eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.200/24
+        - 192.168.1.254/24
       routes:
         - to: default
           via: 192.168.1.1
@@ -111,7 +111,7 @@ network:
 **Raspberry Pi (worker)** - Edita `/etc/dhcpcd.conf`:
 ```bash
 interface eth0
-static ip_address=192.168.1.100/24
+static ip_address=192.168.1.250/24
 static routers=192.168.1.1
 static domain_name_servers=8.8.8.8 1.1.1.1
 ```
@@ -123,38 +123,38 @@ static domain_name_servers=8.8.8.8 1.1.1.1
 ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
 
 # Copiar clave pública a ambos nodos
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "cat >> ~/.ssh/authorized_keys"
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.100 "cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.254 "cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.250 "cat >> ~/.ssh/authorized_keys"
 
 # Verificar
-ssh -o PasswordAuthentication=no root@192.168.1.200 "echo OK"
+ssh -o PasswordAuthentication=no root@192.168.1.254 "echo OK"
 ```
 
 ### Paso 4: Instalar K3s en Master
 
 ```powershell
 # Copiar script
-scp scripts/install/INSTALL-K3S-MASTER-CLEAN.sh root@192.168.1.200:/root/
+scp scripts/install/INSTALL-K3S-MASTER-CLEAN.sh root@192.168.1.254:/root/
 
 # Ejecutar
-ssh root@192.168.1.200 "chmod +x /root/INSTALL-K3S-MASTER-CLEAN.sh && /root/INSTALL-K3S-MASTER-CLEAN.sh"
+ssh root@192.168.1.254 "chmod +x /root/INSTALL-K3S-MASTER-CLEAN.sh && /root/INSTALL-K3S-MASTER-CLEAN.sh"
 ```
 
 ### Paso 5: Instalar K3s en Worker
 
 ```powershell
 # Copiar script
-scp scripts/install/INSTALL-K3S-WORKER-CLEAN.sh root@192.168.1.100:/root/
+scp scripts/install/INSTALL-K3S-WORKER-CLEAN.sh root@192.168.1.250:/root/
 
 # Ejecutar
-ssh root@192.168.1.100 "chmod +x /root/INSTALL-K3S-WORKER-CLEAN.sh && /root/INSTALL-K3S-WORKER-CLEAN.sh"
+ssh root@192.168.1.250 "chmod +x /root/INSTALL-K3S-WORKER-CLEAN.sh && /root/INSTALL-K3S-WORKER-CLEAN.sh"
 ```
 
 ### Paso 6: Validar Clúster
 
 ```powershell
 # Ejecutar script de validación
-ssh root@192.168.1.200 "chmod +x /root/VALIDATE-K3S-CLUSTER.sh && /root/VALIDATE-K3S-CLUSTER.sh"
+ssh root@192.168.1.254 "chmod +x /root/VALIDATE-K3S-CLUSTER.sh && /root/VALIDATE-K3S-CLUSTER.sh"
 
 # Deberías ver ambos nodos en "Ready":
 # NAME              STATUS   ROLES

@@ -93,16 +93,16 @@ sudo journalctl -u k3s-agent.service -f
    ```bash
    # En worker, verificar
    cat /etc/rancher/k3s/config.yaml
-   # Debería tener: server: https://192.168.1.200:6443
+   # Debería tener: server: https://192.168.1.254:6443
    ```
 
 3. **Master no responde**
    ```bash
    # Verificar conectividad
-   ssh root@192.168.1.200 "systemctl status k3s"
+   ssh root@192.168.1.254 "systemctl status k3s"
    
    # Verificar puerto
-   ssh root@192.168.1.200 "ss -tlnp | grep 6443"
+   ssh root@192.168.1.254 "ss -tlnp | grep 6443"
    ```
 
 ---
@@ -220,7 +220,7 @@ kubectl describe pod <pod-name>
 kubectl get pod <pod-name> -o yaml | grep image
 
 # Probar descargar en worker
-ssh pi@192.168.1.100 "crictl pull myimage:latest"
+ssh pi@192.168.1.250 "crictl pull myimage:latest"
 
 # O manualmente
 docker pull myimage:latest
@@ -290,7 +290,7 @@ ls -la /var/lib/rancher/k3s/
 cat /var/lib/rancher/k3s/agent/node-token
 
 # Comparar con token del master
-ssh root@192.168.1.200 "cat /var/lib/rancher/k3s/server/node-token"
+ssh root@192.168.1.254 "cat /var/lib/rancher/k3s/server/node-token"
 
 # Si son diferentes, actualizar worker
 ```
@@ -303,7 +303,7 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 
 # En worker
 export K3S_TOKEN=<token-nuevo>
-export K3S_URL=https://192.168.1.200:6443
+export K3S_URL=https://192.168.1.254:6443
 
 # Reinstalar agent
 curl -sfL https://get.k3s.io | sh -
@@ -318,7 +318,7 @@ kubectl get nodes
 
 ```bash
 # Probar conectar
-curl -k https://192.168.1.200:6443
+curl -k https://192.168.1.254:6443
 
 # O con kubectl
 kubectl get nodes
@@ -392,7 +392,7 @@ kubectl get nodes -o wide
 curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 sh -
 
 # En worker
-curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 K3S_URL=https://192.168.1.200:6443 K3S_TOKEN=<token> sh -
+curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 K3S_URL=https://192.168.1.254:6443 K3S_TOKEN=<token> sh -
 
 # Verificar
 kubectl get nodes -o wide

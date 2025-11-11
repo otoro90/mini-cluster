@@ -71,7 +71,7 @@ docs-clean/
 - Paso 5: Validar cluster
 
 **03-CONFIGURACION-RED.md** (Detalle)
-- IPs estáticas: 192.168.1.200 (master), 192.168.1.100 (worker)
+- IPs estáticas: 192.168.1.254 (master), 192.168.1.250 (worker)
 - Netplan (Armbian) y dhcpcd (Raspberry Pi)
 - CIDR Networks: 192.168.0.0/16 (pods), 10.43.0.0/16 (servicios)
 - Troubleshooting de red
@@ -260,7 +260,7 @@ En `scripts/install/`:
                        ↓
 ┌──────────────────────────────────────────────┐
 │        RED Y DISPOSITIVOS                    │
-│  192.168.1.200 (master) | 192.168.1.100     │
+│  192.168.1.254 (master) | 192.168.1.250     │
 │  Gateway 192.168.1.1                        │
 └──────────────────────────────────────────────┘
 ```

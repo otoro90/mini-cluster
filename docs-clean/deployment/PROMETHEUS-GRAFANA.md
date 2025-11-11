@@ -98,7 +98,7 @@ kubectl patch svc prometheus-grafana -n monitoring -p '{"spec":{"type":"NodePort
 kubectl get svc -n monitoring prometheus-grafana
 
 # Ir a http://localhost:3000 (opción 1)
-# O http://192.168.1.200:3XXXX (opción 2, ver puerto)
+# O http://192.168.1.254:3XXXX (opción 2, ver puerto)
 ```
 
 ### Login
@@ -290,13 +290,13 @@ Grafana → Panel → More options → Export data
 
 ```bash
 # Query Prometheus directamente
-curl 'http://192.168.1.200:9090/api/v1/query?query=up'
+curl 'http://192.168.1.254:9090/api/v1/query?query=up'
 
 # Scrape targets
-curl 'http://192.168.1.200:9090/api/v1/targets'
+curl 'http://192.168.1.254:9090/api/v1/targets'
 
 # Series metadata
-curl 'http://192.168.1.200:9090/api/v1/label/__name__/values'
+curl 'http://192.168.1.254:9090/api/v1/label/__name__/values'
 ```
 
 ---

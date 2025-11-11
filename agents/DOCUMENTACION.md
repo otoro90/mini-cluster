@@ -122,12 +122,12 @@ mini-cluster/
 
 ## 📊 Configuración Final
 
-**Master (Orange Pi - 192.168.1.200)**
+**Master (Orange Pi - 192.168.1.254)**
 - K3s v1.33.5+k3s1 (server)
 - IP estática
 - Puerto 6443 (API)
 
-**Worker (Raspberry Pi - 192.168.1.100)**
+**Worker (Raspberry Pi - 192.168.1.250)**
 - K3s v1.33.5+k3s1 (agent)
 - IP estática
 - Conectado al master
@@ -142,8 +142,8 @@ mini-cluster/
 ## ✅ Checklist de Instalación
 
 - [ ] Leer INICIO-AQUI.md
-- [ ] Configurar red en master (IP 192.168.1.200)
-- [ ] Configurar red en worker (IP 192.168.1.100)
+- [ ] Configurar red en master (IP 192.168.1.254)
+- [ ] Configurar red en worker (IP 192.168.1.250)
 - [ ] Configurar SSH keys
 - [ ] Ejecutar INSTALL-K3S-MASTER-CLEAN.sh
 - [ ] Obtener token del master

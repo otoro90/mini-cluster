@@ -114,7 +114,7 @@ Lee: `docs/MIGRATION_STEP_BY_STEP.md`
 
 Acciones:
 ```bash
-ssh root@192.168.1.200 "bash /root/RUN-MIGRATION.sh"
+ssh root@192.168.1.254 "bash /root/RUN-MIGRATION.sh"
 ```
 
 O manualmente:
@@ -136,8 +136,8 @@ Acciones:
 
 ### PASO 4: Final - Validación (30 minutos)
 ```bash
-ssh root@192.168.1.200 "kubectl get nodes"
-ssh root@192.168.1.200 "kubectl get pods -A"
+ssh root@192.168.1.254 "kubectl get nodes"
+ssh root@192.168.1.254 "kubectl get pods -A"
 ```
 
 ---
@@ -222,8 +222,8 @@ Una vez hecho, todos los scripts de migración están listos para ejecutarse.
 ┌────────────────────────────────────────────────┐
 │  K3S CLUSTER PRODUCTION-READY EN ARM64         │
 ├────────────────────────────────────────────────┤
-│ ✓ Master: Orange Pi (192.168.1.200)            │
-│ ✓ Worker: Raspberry Pi (192.168.1.100)         │
+│ ✓ Master: Orange Pi (192.168.1.254)            │
+│ ✓ Worker: Raspberry Pi (192.168.1.250)         │
 │ ✓ CNI: Cilium (eBPF, seguridad, performance)  │
 │ ✓ Storage: Longhorn (distribuido, HA)          │
 │ ✓ Ingress: Traefik (routing moderno)           │

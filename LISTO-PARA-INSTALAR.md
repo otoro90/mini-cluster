@@ -25,8 +25,8 @@
 
 ```
 Paso 1: Configurar Red (5 min)
-├─ Master: IP 192.168.1.200 (netplan)
-└─ Worker: IP 192.168.1.100 (dhcpcd)
+├─ Master: IP 192.168.1.254 (netplan)
+└─ Worker: IP 192.168.1.250 (dhcpcd)
 
 Paso 2: SSH Keys (2 min)
 └─ Acceso sin password desde tu PC
@@ -152,7 +152,7 @@ sudo systemctl restart dhcpcd
 ### **SSH Keys (Desde tu PC)**
 ```powershell
 ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.254 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
 ### **Instalar K3s (Master)**

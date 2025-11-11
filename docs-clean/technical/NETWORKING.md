@@ -24,12 +24,12 @@ kubectl get daemonset -n kube-system
 Red donde **viven los pods**.
 
 ```
-Master Node (192.168.1.200)
+Master Node (192.168.1.254)
 ├─ Pod A (192.168.0.10)
 ├─ Pod B (192.168.0.11)
 └─ Pod C (192.168.0.12)
 
-Worker Node (192.168.1.100)
+Worker Node (192.168.1.250)
 ├─ Pod X (192.168.0.20)
 ├─ Pod Y (192.168.0.21)
 └─ Pod Z (192.168.0.22)
@@ -76,8 +76,8 @@ ifconfig
 # o
 ip addr
 
-# Master: eth0 = 192.168.1.200
-# Worker: eth0 = 192.168.1.100
+# Master: eth0 = 192.168.1.254
+# Worker: eth0 = 192.168.1.250
 ```
 
 ---
@@ -101,7 +101,7 @@ Pod A en Master (192.168.0.10)
            ↓
     Flannel en Master
     ├─> Encapsula paquete
-    └─> Envía a Worker (192.168.1.100)
+    └─> Envía a Worker (192.168.1.250)
            ↓
     Flannel en Worker
     ├─> Desencapsula
@@ -193,7 +193,7 @@ Luego:
 # En tu PC
 # Editar C:\Windows\System32\drivers\etc\hosts
 # Agregar:
-192.168.1.200 myapp.local
+192.168.1.254 myapp.local
 
 # Abrir navegador
 http://myapp.local

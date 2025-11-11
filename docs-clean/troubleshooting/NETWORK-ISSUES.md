@@ -8,17 +8,17 @@ Diagnosticar y resolver problemas de conectividad.
 
 ```bash
 # 1. ¿Puedo alcanzar el nodo?
-ping 192.168.1.200        # Master
-ping 192.168.1.100        # Worker
+ping 192.168.1.254        # Master
+ping 192.168.1.250        # Worker
 
 # 2. ¿DNS funciona?
 nslookup google.com
 
 # 3. ¿SSH funciona?
-ssh root@192.168.1.200 "hostname"
+ssh root@192.168.1.254 "hostname"
 
 # 4. ¿K3s está corriendo?
-ssh root@192.168.1.200 "systemctl status k3s"
+ssh root@192.168.1.254 "systemctl status k3s"
 
 # 5. ¿Puedo hablar con API?
 kubectl get nodes
@@ -26,13 +26,13 @@ kubectl get nodes
 
 ---
 
-## **Problema: "Unable to connect to 192.168.1.200"**
+## **Problema: "Unable to connect to 192.168.1.254"**
 
 ### Verificación
 
 ```bash
 # En tu PC (Windows PowerShell)
-ping 192.168.1.200
+ping 192.168.1.254
 
 # Si no responde:
 # 1. ¿IP correcta?
@@ -47,7 +47,7 @@ ping 192.168.1.200
 # Ver IP asignada
 ip addr show eth0
 
-# Debería mostrar: inet 192.168.1.200/24
+# Debería mostrar: inet 192.168.1.254/24
 
 # Si NO está:
 ip route show
@@ -72,7 +72,7 @@ network:
     eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.200/24
+        - 192.168.1.254/24
       routes:
         - to: default
           via: 192.168.1.1
@@ -301,14 +301,14 @@ ip route show
 # 192.168.0.0/16 via ... dev ...
 
 # Agregar manualmente si falta
-sudo ip route add 192.168.0.0/16 via 192.168.1.100 dev eth0  # desde master
-sudo ip route add 192.168.0.0/16 via 192.168.1.200 dev eth0  # desde worker
+sudo ip route add 192.168.0.0/16 via 192.168.1.250 dev eth0  # desde master
+sudo ip route add 192.168.0.0/16 via 192.168.1.254 dev eth0  # desde worker
 
 # Hacer permanente en netplan
 sudo nano /etc/netplan/50-cloud-init.yaml
 # Agregar bajo routes:
 # - to: 192.168.0.0/16
-#   via: 192.168.1.100
+#   via: 192.168.1.250
 sudo netplan apply
 ```
 
@@ -317,8 +317,8 @@ sudo netplan apply
 ## **Checklist de Troubleshooting**
 
 1. ✅ Ping a gateway: `ping 192.168.1.1`
-2. ✅ Ping entre nodos: `ping 192.168.1.100` (desde master)
-3. ✅ SSH a nodos: `ssh root@192.168.1.200`
+2. ✅ Ping entre nodos: `ping 192.168.1.250` (desde master)
+3. ✅ SSH a nodos: `ssh root@192.168.1.254`
 4. ✅ K3s corriendo: `systemctl status k3s`
 5. ✅ Nodos Ready: `kubectl get nodes`
 6. ✅ Flannel corriendo: `kubectl get daemonset -n kube-system`

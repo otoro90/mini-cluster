@@ -31,7 +31,7 @@ dir $env:USERPROFILE\.ssh\
 
 ```powershell
 # Copiar public key
-Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh root@192.168.1.200 `
+Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh root@192.168.1.254 `
   "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
 
 # Si pide contraseña, escribir la del root de Orange Pi
@@ -43,7 +43,7 @@ Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh root@192.168.1.200 `
 
 ```powershell
 # Copiar public key
-Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh pi@192.168.1.100 `
+Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh pi@192.168.1.250 `
   "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
 
 # Si pide contraseña, escribir la del usuario 'pi'
@@ -55,11 +55,11 @@ Get-Content "$env:USERPROFILE\.ssh\id_rsa.pub" | ssh pi@192.168.1.100 `
 
 ```powershell
 # Master (sin contraseña)
-ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no root@192.168.1.200 "hostname"
+ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no root@192.168.1.254 "hostname"
 # Debería responder: orangepi5
 
 # Worker (sin contraseña)
-ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no pi@192.168.1.100 "hostname"
+ssh -o PasswordAuthentication=no -o StrictHostKeyChecking=no pi@192.168.1.250 "hostname"
 # Debería responder: rpi-worker
 ```
 
@@ -74,9 +74,9 @@ Edita tu perfil PowerShell:
 notepad $env:USERPROFILE\Documents\PowerShell\profile.ps1
 
 # Agregar:
-function m { ssh -o StrictHostKeyChecking=no root@192.168.1.200 }
-function w { ssh -o StrictHostKeyChecking=no pi@192.168.1.100 }
-function k { ssh -o StrictHostKeyChecking=no root@192.168.1.200 kubectl }
+function m { ssh -o StrictHostKeyChecking=no root@192.168.1.254 }
+function w { ssh -o StrictHostKeyChecking=no pi@192.168.1.250 }
+function k { ssh -o StrictHostKeyChecking=no root@192.168.1.254 kubectl }
 
 # Luego usar como:
 # m              → Conecta a master
@@ -105,8 +105,8 @@ cat ~/.ssh/authorized_keys
 Verificar conectividad:
 
 ```powershell
-ping 192.168.1.200  # master
-ping 192.168.1.100  # worker
+ping 192.168.1.254  # master
+ping 192.168.1.250  # worker
 ```
 
 ### "Connection refused"

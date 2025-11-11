@@ -124,31 +124,31 @@ Documentación de entrada (5 minutos)
 Guía detallada (20 minutos de lectura)
 
 ### 3. Configura Red
-- Orange Pi: IP estática 192.168.1.200 (netplan)
-- Raspberry Pi: IP estática 192.168.1.100 (dhcpcd)
+- Orange Pi: IP estática 192.168.1.254 (netplan)
+- Raspberry Pi: IP estática 192.168.1.250 (dhcpcd)
 
 ### 4. Configura SSH
 Desde Windows PowerShell:
 ```powershell
 ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "cat >> ~/.ssh/authorized_keys"
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.100 "cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.254 "cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.250 "cat >> ~/.ssh/authorized_keys"
 ```
 
 ### 5. Ejecuta Scripts de Instalación
 ```powershell
 # Master
-scp scripts/install/INSTALL-K3S-MASTER-CLEAN.sh root@192.168.1.200:/root/
-ssh root@192.168.1.200 "chmod +x /root/INSTALL-K3S-MASTER-CLEAN.sh && /root/INSTALL-K3S-MASTER-CLEAN.sh"
+scp scripts/install/INSTALL-K3S-MASTER-CLEAN.sh root@192.168.1.254:/root/
+ssh root@192.168.1.254 "chmod +x /root/INSTALL-K3S-MASTER-CLEAN.sh && /root/INSTALL-K3S-MASTER-CLEAN.sh"
 
 # Worker
-scp scripts/install/INSTALL-K3S-WORKER-CLEAN.sh root@192.168.1.100:/root/
-ssh root@192.168.1.100 "chmod +x /root/INSTALL-K3S-WORKER-CLEAN.sh && /root/INSTALL-K3S-WORKER-CLEAN.sh"
+scp scripts/install/INSTALL-K3S-WORKER-CLEAN.sh root@192.168.1.250:/root/
+ssh root@192.168.1.250 "chmod +x /root/INSTALL-K3S-WORKER-CLEAN.sh && /root/INSTALL-K3S-WORKER-CLEAN.sh"
 ```
 
 ### 6. Valida el Clúster
 ```powershell
-ssh root@192.168.1.200 "chmod +x /root/VALIDATE-K3S-CLUSTER.sh && /root/VALIDATE-K3S-CLUSTER.sh"
+ssh root@192.168.1.254 "chmod +x /root/VALIDATE-K3S-CLUSTER.sh && /root/VALIDATE-K3S-CLUSTER.sh"
 ```
 
 **Resultado esperado:**

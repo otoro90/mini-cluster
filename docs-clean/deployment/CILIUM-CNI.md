@@ -55,7 +55,7 @@ helm install cilium cilium/cilium \
   --namespace kube-system \
   --set nodePort.enabled=true \
   --set kubeProxyReplacement=partial \
-  --set k8sServiceHost=192.168.1.200 \
+  --set k8sServiceHost=192.168.1.254 \
   --set k8sServicePort=6443 \
   --set containerRuntime.integration=containerd \
   --set bpf.masquerade=true \

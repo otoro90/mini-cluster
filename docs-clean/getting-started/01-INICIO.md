@@ -12,8 +12,8 @@
 
 ### **Paso 1: Configurar Red (5 min)**
 IPs estáticas en ambos dispositivos:
-- Master: `192.168.1.200`
-- Worker: `192.168.1.100`
+- Master: `192.168.1.254`
+- Worker: `192.168.1.250`
 
 Lee: `03-CONFIGURACION-RED.md`
 
@@ -37,7 +37,7 @@ bash scripts/install/INSTALL-K3S-WORKER-CLEAN.sh
 ### **Paso 5: Validar (5 min)**
 Desde tu PC:
 ```bash
-ssh root@192.168.1.200 "kubectl get nodes"
+ssh root@192.168.1.254 "kubectl get nodes"
 ```
 
 Ambos nodos deberían estar **Ready**.

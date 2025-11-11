@@ -12,8 +12,8 @@ Tu proyecto mini-cluster está completamente limpio, organizado y listo para ins
 Abre ese archivo. Te dirá los 5 pasos que necesitas seguir.
 
 ### 2️⃣ Configura tu Red
-- Orange Pi: IP 192.168.1.200 (estática)
-- Raspberry Pi: IP 192.168.1.100 (estática)
+- Orange Pi: IP 192.168.1.254 (estática)
+- Raspberry Pi: IP 192.168.1.250 (estática)
 
 ### 3️⃣ Configura SSH
 Desde Windows PowerShell, setup de claves SSH.

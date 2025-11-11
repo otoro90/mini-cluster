@@ -34,17 +34,17 @@ Sistema de storage cloud-native:
 3. **iSCSI en nodos**:
    ```bash
    # En master
-   ssh root@192.168.1.200 "sudo apt install -y open-iscsi"
+   ssh root@192.168.1.254 "sudo apt install -y open-iscsi"
    
    # En worker
-   ssh pi@192.168.1.100 "sudo apt install -y open-iscsi"
+   ssh pi@192.168.1.250 "sudo apt install -y open-iscsi"
    ```
 
 4. **Espacio en disco disponible**:
    ```bash
    # Mínimo 20GB recomendado
-   ssh root@192.168.1.200 "df -h"
-   ssh pi@192.168.1.100 "df -h"
+   ssh root@192.168.1.254 "df -h"
+   ssh pi@192.168.1.250 "df -h"
    ```
 
 ---

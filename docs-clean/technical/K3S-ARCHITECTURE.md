@@ -113,7 +113,7 @@ Explicación técnica de cómo funciona K3s.
 
 ## **Puertos Utilizados**
 
-### Master (192.168.1.200)
+### Master (192.168.1.254)
 
 | Puerto | Protocolo | Servicio |
 |---|---|---|
@@ -123,7 +123,7 @@ Explicación técnica de cómo funciona K3s.
 | 10257 | TCP | Controller Manager |
 | 2379-2380 | TCP | etcd |
 
-### Worker (192.168.1.100)
+### Worker (192.168.1.250)
 
 | Puerto | Protocolo | Servicio |
 |---|---|---|
@@ -330,7 +330,7 @@ curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 sh -
 
 # En worker
 sudo systemctl stop k3s-agent
-curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 K3S_URL=https://192.168.1.200:6443 K3S_TOKEN=<token> sh -
+curl -sfL https://get.k3s.io | K3S_VERSION=v1.33.5+k3s1 K3S_URL=https://192.168.1.254:6443 K3S_TOKEN=<token> sh -
 ```
 
 ---

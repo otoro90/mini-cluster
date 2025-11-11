@@ -291,7 +291,7 @@ spec:
 
 ```bash
 # En tu /etc/hosts
-192.168.1.200 keycloak.local
+192.168.1.254 keycloak.local
 
 # Ir a http://keycloak.local/admin
 ```

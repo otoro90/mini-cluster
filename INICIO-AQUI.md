@@ -12,8 +12,8 @@
 
 ### **Paso 1: Red (5 minutos)**
 Configura IPs estáticas en ambos dispositivos:
-- Master: `192.168.1.200`
-- Worker: `192.168.1.100`
+- Master: `192.168.1.254`
+- Worker: `192.168.1.250`
 
 **Lee**: `INSTALACION-K3S-LIMPIA.md` → Paso 1
 
@@ -22,8 +22,8 @@ Configura acceso sin password desde tu PC:
 
 ```powershell
 ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh pi@192.168.1.100 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.254 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh pi@192.168.1.250 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
 **Lee**: `INSTALACION-K3S-LIMPIA.md` → Paso 2
@@ -49,7 +49,7 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 En el worker (Raspberry Pi):
 
 ```bash
-export K3S_URL="https://192.168.1.200:6443"
+export K3S_URL="https://192.168.1.254:6443"
 export K3S_TOKEN="[Pega el token del paso anterior]"
 
 curl -sfL https://get.k3s.io | K3S_URL=$K3S_URL K3S_TOKEN=$K3S_TOKEN sh -
@@ -61,7 +61,7 @@ curl -sfL https://get.k3s.io | K3S_URL=$K3S_URL K3S_TOKEN=$K3S_TOKEN sh -
 Desde tu PC, verifica que funciona:
 
 ```powershell
-ssh root@192.168.1.200 "kubectl get nodes"
+ssh root@192.168.1.254 "kubectl get nodes"
 
 # Debería mostrar AMBOS nodos como Ready
 ```
@@ -104,7 +104,7 @@ ssh root@192.168.1.200 "kubectl get nodes"
 
 **Worker no conecta:**
 ```bash
-ssh root@192.168.1.200 "kubectl get nodes"  # Ver estado
+ssh root@192.168.1.254 "kubectl get nodes"  # Ver estado
 sudo journalctl -u k3s-agent.service -f      # Ver errores en worker
 ```
 

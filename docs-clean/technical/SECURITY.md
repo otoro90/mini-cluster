@@ -45,7 +45,7 @@ Acceso seguro:
 
 ```bash
 # Copiar desde master a tu PC
-ssh root@192.168.1.200 "sudo cat /etc/rancher/k3s/k3s.yaml" > ~/.kube/config
+ssh root@192.168.1.254 "sudo cat /etc/rancher/k3s/k3s.yaml" > ~/.kube/config
 
 # Asegurar permisos
 chmod 600 ~/.kube/config

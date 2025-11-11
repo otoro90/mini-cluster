@@ -48,14 +48,14 @@ kubectl get nodes
 
 ```bash
 # ¿Worker conectado?
-ssh pi@192.168.1.100 "systemctl status k3s-agent"
+ssh pi@192.168.1.250 "systemctl status k3s-agent"
 
 # ¿Master responde?
-ssh root@192.168.1.200 "systemctl status k3s"
+ssh root@192.168.1.254 "systemctl status k3s"
 
 # ¿Se ven mutuamente?
-ssh root@192.168.1.200 "ping -c 3 192.168.1.100"
-ssh pi@192.168.1.100 "ping -c 3 192.168.1.200"
+ssh root@192.168.1.254 "ping -c 3 192.168.1.250"
+ssh pi@192.168.1.250 "ping -c 3 192.168.1.254"
 ```
 
 ### Solución
@@ -131,8 +131,8 @@ kubectl get storageclass
 # Debería mostrar: local-path
 
 # ¿Hay espacio en disco?
-ssh root@192.168.1.200 "df -h"
-ssh pi@192.168.1.100 "df -h"
+ssh root@192.168.1.254 "df -h"
+ssh pi@192.168.1.250 "df -h"
 
 # Mínimo 10% libre
 ```
@@ -159,7 +159,7 @@ Kubelet se vuelve lento.
 
 ```bash
 # Ver logs
-ssh root@192.168.1.200 "sudo journalctl -u k3s.service | grep -i cgroup"
+ssh root@192.168.1.254 "sudo journalctl -u k3s.service | grep -i cgroup"
 
 # Típicamente:
 # - OOM (sin memoria)
@@ -175,8 +175,8 @@ kubectl top nodes
 kubectl top pods -a
 
 # Liberar espacio
-ssh root@192.168.1.200 "sudo apt clean && sudo apt autoclean"
-ssh pi@192.168.1.100 "sudo apt clean && sudo apt autoclean"
+ssh root@192.168.1.254 "sudo apt clean && sudo apt autoclean"
+ssh pi@192.168.1.250 "sudo apt clean && sudo apt autoclean"
 
 # Si sigue, reiniciar
 sudo systemctl restart k3s
@@ -298,10 +298,10 @@ kubectl get node
 
 ```bash
 # Ver certificados
-ssh root@192.168.1.200 "sudo ls -la /var/lib/rancher/k3s/server/tls/"
+ssh root@192.168.1.254 "sudo ls -la /var/lib/rancher/k3s/server/tls/"
 
 # Ver fecha de expiración (si openssl disponible)
-ssh root@192.168.1.200 "sudo openssl x509 -in /var/lib/rancher/k3s/server/tls/server-ca.crt -text -noout | grep -A 2 'Validity'"
+ssh root@192.168.1.254 "sudo openssl x509 -in /var/lib/rancher/k3s/server/tls/server-ca.crt -text -noout | grep -A 2 'Validity'"
 ```
 
 ### Solución
@@ -309,11 +309,11 @@ ssh root@192.168.1.200 "sudo openssl x509 -in /var/lib/rancher/k3s/server/tls/se
 ```bash
 # K3s renueva automáticamente
 # Pero para forzar:
-ssh root@192.168.1.200 "sudo systemctl restart k3s"
+ssh root@192.168.1.254 "sudo systemctl restart k3s"
 
 # Esperar que se renueven
 # Ver logs
-ssh root@192.168.1.200 "sudo journalctl -u k3s.service | grep -i cert"
+ssh root@192.168.1.254 "sudo journalctl -u k3s.service | grep -i cert"
 ```
 
 ---
@@ -403,10 +403,10 @@ kubectl apply -f https://raw.githubusercontent.com/traefik/traefik-helm-chart/ma
 
 # Agregar host al /etc/hosts
 # En tu PC
-# 192.168.1.200 test.local
+# 192.168.1.254 test.local
 
 # O en Linux/Mac
-echo "192.168.1.200 test.local" | sudo tee -a /etc/hosts
+echo "192.168.1.254 test.local" | sudo tee -a /etc/hosts
 
 # Probar
 curl http://test.local

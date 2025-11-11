@@ -35,8 +35,8 @@ info() {
 # Verificar que estamos en master
 verify_master() {
     local ip=$(hostname -I | awk '{print $1}')
-    if [ "$ip" != "192.168.1.200" ]; then
-        error "Este script debe ejecutarse solo en el master (192.168.1.200)"
+    if [ "$ip" != "192.168.1.254" ]; then
+        error "Este script debe ejecutarse solo en el master (192.168.1.254)"
         error "IP actual: $ip"
         exit 1
     fi

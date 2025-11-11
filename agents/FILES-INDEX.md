@@ -59,12 +59,12 @@ MIGRATION-SUMMARY.md ............................. Resumen rápido de la migraci
 
 ## 🔧 Configuración de Nodos
 
-**Master (Orange Pi - 192.168.1.200):**
+**Master (Orange Pi - 192.168.1.254):**
 - K3s Server instalado: ✅
 - Token generado: ✅ (`/var/lib/rancher/k3s/server/node-token`)
 - SSH: ⚠️ A veces se bloquea con comandos de red
 
-**Worker (Raspberry Pi - 192.168.1.100):**
+**Worker (Raspberry Pi - 192.168.1.250):**
 - K3s Agent instalado: ✅
 - Token sincronizado: ✅ (correcto)
 - SSH: ✅ Funciona bien

@@ -36,9 +36,9 @@ echo ""
     echo "[1/5] Obteniendo datos del master..."
     echo ""
     
-    echo "IP del Master (default: 192.168.1.200):"
+    echo "IP del Master (default: 192.168.1.254):"
     read -r MASTER_IP
-    MASTER_IP="${MASTER_IP:-192.168.1.200}"
+    MASTER_IP="${MASTER_IP:-192.168.1.254}"
     
     echo "Token del Master (K1...):"
     read -r K3S_TOKEN
@@ -114,7 +114,7 @@ echo ""
     echo ""
     echo "Próximos pasos:"
     echo "1. Desde tu PC, ejecuta:"
-    echo "   ssh root@192.168.1.200 \"kubectl get nodes\""
+    echo "   ssh root@192.168.1.254 \"kubectl get nodes\""
     echo "2. Deberías ver ambos nodos como Ready"
     echo ""
     echo "Para ver logs: sudo journalctl -u k3s-agent.service -f"

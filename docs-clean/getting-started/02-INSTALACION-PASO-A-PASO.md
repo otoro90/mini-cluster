@@ -19,7 +19,7 @@ network:
     eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.200/24
+        - 192.168.1.254/24
       routes:
         - to: default
           via: 192.168.1.1
@@ -42,7 +42,7 @@ sudo nano /etc/dhcpcd.conf
 
 # Agregar al final:
 interface eth0
-static ip_address=192.168.1.100/24
+static ip_address=192.168.1.250/24
 static routers=192.168.1.1
 static domain_name_servers=8.8.8.8 1.1.1.1
 
@@ -65,14 +65,14 @@ Desde tu PC Windows:
 ssh-keygen -t rsa -b 4096 -f $env:USERPROFILE\.ssh\id_rsa -N '""'
 
 # Copiar a master
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.200 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@192.168.1.254 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
 # Copiar a worker
-cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh pi@192.168.1.100 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+cat $env:USERPROFILE\.ssh\id_rsa.pub | ssh pi@192.168.1.250 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 
 # Verificar
-ssh -o PasswordAuthentication=no root@192.168.1.200 "echo 'Master OK'"
-ssh -o PasswordAuthentication=no pi@192.168.1.100 "echo 'Worker OK'"
+ssh -o PasswordAuthentication=no root@192.168.1.254 "echo 'Master OK'"
+ssh -o PasswordAuthentication=no pi@192.168.1.250 "echo 'Worker OK'"
 ```
 
 ---
@@ -122,7 +122,7 @@ Desde tu PC:
 
 ```powershell
 # Ver nodos
-ssh root@192.168.1.200 "kubectl get nodes"
+ssh root@192.168.1.254 "kubectl get nodes"
 
 # Debería mostrar:
 # NAME            STATUS   ROLES                  AGE   VERSION
@@ -130,10 +130,10 @@ ssh root@192.168.1.200 "kubectl get nodes"
 # rpi-worker      Ready    <none>                 1m    v1.33.5+k3s1
 
 # Ver pods
-ssh root@192.168.1.200 "kubectl get pods -A"
+ssh root@192.168.1.254 "kubectl get pods -A"
 
 # Ver servicios
-ssh root@192.168.1.200 "kubectl get svc -A"
+ssh root@192.168.1.254 "kubectl get svc -A"
 ```
 
 Si ambos nodos están **Ready**, ¡K3s está funcionando! ✅

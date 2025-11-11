@@ -16,7 +16,7 @@ Detalles de la configuración de red para Orange Pi y Raspberry Pi.
     │                         │                 │
 ┌───▼──────────────┐  ┌──────▼─────────────┐   │
 │ Orange Pi Master │  │ Raspberry Pi Agnt  │   │ 
-│ 192.168.1.200    │  │ 192.168.1.100      │   │ (otros dispositivos)
+│ 192.168.1.254    │  │ 192.168.1.250      │   │ (otros dispositivos)
 │ Armbian Ubuntu   │  │ Raspberry Pi OS    │   │
 └──────────────────┘  └────────────────────┘   │
     :6443 (API)           :10250 (kubelet)     │
@@ -30,8 +30,8 @@ Detalles de la configuración de red para Orange Pi y Raspberry Pi.
 
 | Dispositivo | IP | Rol | Puertos |
 |---|---|---|---|
-| **Orange Pi** | `192.168.1.200` | Master (control-plane) | 6443, 10250, 6783 |
-| **Raspberry Pi** | `192.168.1.100` | Worker (agent) | 10250, 6783 |
+| **Orange Pi** | `192.168.1.254` | Master (control-plane) | 6443, 10250, 6783 |
+| **Raspberry Pi** | `192.168.1.250` | Worker (agent) | 10250, 6783 |
 | **Gateway** | `192.168.1.1` | Router | - |
 | **DNS** | `8.8.8.8` `1.1.1.1` | Google, Cloudflare | - |
 
@@ -72,7 +72,7 @@ network:
     eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.200/24
+        - 192.168.1.254/24
       routes:
         - to: default
           via: 192.168.1.1
@@ -97,7 +97,7 @@ sudo nano /etc/network/interfaces
 ```
 auto eth0
 iface eth0 inet static
-    address 192.168.1.200
+    address 192.168.1.254
     netmask 255.255.255.0
     gateway 192.168.1.1
     dns-nameservers 8.8.8.8 1.1.1.1
@@ -124,7 +124,7 @@ Agregar al final:
 
 ```
 interface eth0
-static ip_address=192.168.1.100/24
+static ip_address=192.168.1.250/24
 static routers=192.168.1.1
 static domain_name_servers=8.8.8.8 1.1.1.1
 ```
@@ -150,7 +150,7 @@ network:
     eth0:
       dhcp4: false
       addresses:
-        - 192.168.1.100/24
+        - 192.168.1.250/24
       routes:
         - to: default
           via: 192.168.1.1
@@ -184,8 +184,8 @@ cat /etc/resolv.conf
 ping -c 3 192.168.1.1
 
 # Ping entre dispositivos
-ping -c 3 192.168.1.100  # desde master
-ping -c 3 192.168.1.200  # desde worker
+ping -c 3 192.168.1.250  # desde master
+ping -c 3 192.168.1.254  # desde worker
 ```
 
 ---
@@ -194,16 +194,16 @@ ping -c 3 192.168.1.200  # desde worker
 
 ```powershell
 # Ping a master
-ping 192.168.1.200
+ping 192.168.1.254
 
 # Ping a worker
-ping 192.168.1.100
+ping 192.168.1.250
 
 # SSH a master
-ssh root@192.168.1.200 "ip a"
+ssh root@192.168.1.254 "ip a"
 
 # SSH a worker
-ssh pi@192.168.1.100 "ip a"
+ssh pi@192.168.1.250 "ip a"
 ```
 
 ---
@@ -268,7 +268,7 @@ sudo dhclient -r eth0
 sudo dhclient eth0
 
 # O forzar estática
-sudo ip addr add 192.168.1.200/24 dev eth0
+sudo ip addr add 192.168.1.254/24 dev eth0
 sudo ip route add default via 192.168.1.1
 ```
 
