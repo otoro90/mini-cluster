@@ -36,7 +36,7 @@ La RPi 4 tiene PXE nativo, no necesita SD.
 |---|---|---|---|---|
 | Maestro | orangepi6plus | 192.168.1.210 | — | 8GB |
 | Worker 1 | worker1 | 192.168.1.211 | 76:86:c1:88:66:d7 | 4GB |
-| Worker 2 | worker2 | 192.168.1.212 | 18:47:3d:fc:0f:d9 | 8GB |
+| Worker 2 | worker2 | 192.168.1.212 | 9e:67:0e:af:20:e1 | 8GB |
 | Worker 3 | worker3 | 192.168.1.213 | dc:a6:32:e9:2a:be | — |
 
 ---
@@ -47,8 +47,8 @@ La RPi 4 tiene PXE nativo, no necesita SD.
 /mnt/ssd/netboot/
 ├── tftp/                           ← Raíz TFTP
 │   ├── pxelinux.cfg/               ← Para fase PXEClient
-│   │   ├── 01-76-86-c1-88-66-d7   ← Worker 1 (paths con worker1/)
-│   │   └── 01-18-47-3d-fc-0f-d9   ← Worker 2 (paths con worker2/)
+│   │   ├── 01-76-86-c1-88-66-d7   ← Worker 1
+│   │   └── 01-9e-67-0e-af-20-e1   ← Worker 2
 │   ├── worker1/
 │   │   ├── vmlinuz
 │   │   ├── initrd.img
