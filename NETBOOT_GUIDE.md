@@ -19,13 +19,13 @@
       ┌─────────┼─────────────┐
       ▼         ▼             ▼
   Worker 1   Worker 2     Worker 3
-  OPi 5 4GB  OPi 5 8GB    RPi 4
+  OPi 5 4GB  OPi 5 8GB    RPi 4b model 8GB
   .211        .212          .213
   (Netboot)  (Netboot)   (Netboot)
 ```
 
 **Principio clave**: Los workers NO tienen OS en disco. Arrancan por red (Netboot).
-La OPi 5 necesita una micro-SD de 256MB como "boot bridge" para saltar a la red.
+La OPi 5 inicialmente necesitaban una micro-SD de 256MB como "boot bridge" para saltar a la red. Pero se configuro la SPI, para que bootearan a la red sin estas.
 La RPi 4 tiene PXE nativo, no necesita SD.
 
 ---
@@ -34,10 +34,12 @@ La RPi 4 tiene PXE nativo, no necesita SD.
 
 | Nodo | Hostname | IP | MAC | RAM |
 |---|---|---|---|---|
-| Maestro | orangepi6plus | 192.168.1.210 | — | 8GB |
+| Maestro | orangepi6plus | 192.168.1.210 | — | 32GB |
 | Worker 1 | worker1 | 192.168.1.211 | 76:86:c1:88:66:d7 | 4GB |
 | Worker 2 | worker2 | 192.168.1.212 | 9e:67:0e:af:20:e1 | 8GB |
-| Worker 3 | worker3 | 192.168.1.213 | dc:a6:32:e9:2a:be | — |
+| Worker 3 | worker3 | 192.168.1.213 | dc:a6:32:e9:2a:be | 8GB |
+
+> **Estado verificado (Abril 2026)**: Los 3 workers arrancan desde NFS. Workers 1 y 2 via U-Boot SPI → TFTP → NFS. Worker 3 (RPi 4) via EEPROM PXE nativo → TFTP → NFS.
 
 ---
 
@@ -49,6 +51,7 @@ La RPi 4 tiene PXE nativo, no necesita SD.
 │   ├── pxelinux.cfg/               ← Para fase PXEClient
 │   │   ├── 01-76-86-c1-88-66-d7   ← Worker 1
 │   │   └── 01-9e-67-0e-af-20-e1   ← Worker 2
+│   │   └── 01-dc-a6-32-e9-2a-be   ← Worker 3
 │   ├── worker1/
 │   │   ├── vmlinuz
 │   │   ├── initrd.img
@@ -77,7 +80,7 @@ sudo apt install -y dnsmasq nfs-kernel-server u-boot-tools
 
 ## Paso 2: Configurar dnsmasq
 
-**`/etc/dnsmasq.conf`**:
+**`/etc/dnsmasq.conf`** (configuración final verificada):
 ```
 interface=eth0
 port=0
@@ -89,29 +92,93 @@ dhcp-range=192.168.1.210,192.168.1.240,12h
 dhcp-vendorclass=set:uboot,U-Boot
 dhcp-vendorclass=set:pxeclient,PXEClient
 
-# Worker 1
+# CLAVE RPi4: responder con option 60=PXEClient para que la RPi acepte el OFFER
+dhcp-option=tag:pxeclient,60,PXEClient
+
+# Worker 1 (OPi 5, U-Boot SPI)
 dhcp-host=76:86:c1:88:66:d7,set:worker1,192.168.1.211,worker1
 dhcp-option=tag:worker1,tag:uboot,option:bootfile-name,worker1/boot.scr
 dhcp-option=tag:worker1,tag:pxeclient,option:bootfile-name,pxelinux.cfg/01-76-86-c1-88-66-d7
 dhcp-option=tag:worker1,17,192.168.1.210:/mnt/ssd/netboot/nfs/worker1
 
-# Worker 2
-dhcp-host=18:47:3d:fc:0f:d9,set:worker2,192.168.1.212,worker2
+# Worker 2 (OPi 5, U-Boot SPI)
+dhcp-host=9e:67:0e:af:20:e1,set:worker2,192.168.1.212,worker2
 dhcp-option=tag:worker2,tag:uboot,option:bootfile-name,worker2/boot.scr
-dhcp-option=tag:worker2,tag:pxeclient,option:bootfile-name,pxelinux.cfg/01-18-47-3d-fc-0f-d9
+dhcp-option=tag:worker2,tag:pxeclient,option:bootfile-name,pxelinux.cfg/01-9e-67-0e-af-20-e1
 dhcp-option=tag:worker2,17,192.168.1.210:/mnt/ssd/netboot/nfs/worker2
 
-# Worker 3 — RPi 4
+# Worker 3 (RPi 4) — EEPROM PXE nativo
+# dhcp-boot: fija siaddr (campo DHCP next-server) + bootfile + IP TFTP
+# option 66: TFTP server explícito (la RPi lo solicita y lo necesita)
 dhcp-host=dc:a6:32:e9:2a:be,set:worker3,192.168.1.213,worker3
-dhcp-option=tag:worker3,option:bootfile-name,bootcode.bin
+dhcp-boot=tag:worker3,bootcode.bin,,192.168.1.210
+dhcp-option=tag:worker3,66,192.168.1.210
+dhcp-option=tag:worker3,17,192.168.1.210:/mnt/ssd/netboot/nfs/worker3
 
 enable-tftp
 tftp-root=/mnt/ssd/netboot/tftp
 ```
 
+> **Por qué RPi 4 necesita `dhcp-boot` + `option 66`**: La RPi 4 hace DHCPDISCOVER
+> solicitando explícitamente option 66 (TFTP server). Si el OFFER no incluye option 66,
+> la RPi ignora el OFFER y repite el DISCOVER indefinidamente. El campo `siaddr` (next-server)
+> del paquete DHCP no es suficiente — la opción 66 debe estar presente.
+> `dhcp-option=bootfile-name` solo no funciona para RPi 4 porque no rellena el campo `siaddr`.
+
 ```bash
 sudo systemctl restart dnsmasq && sudo systemctl enable dnsmasq
 ```
+
+---
+
+## Paso 3: Configurar NFS
+
+---
+
+## Paso 2b: Preparar archivos TFTP para RPi 4 (Worker 3)
+
+```bash
+# La RPi 4 busca archivos en el TFTP root (no en un subdirectorio)
+mkdir -p /mnt/ssd/netboot/tftp/overlays
+
+# Copiar desde Raspberry Pi OS image o rootfs NFS:
+# bootcode.bin, start4.elf, fixup4.dat — firmware de 1ra etapa
+# kernel8.img (o vmlinuz) — kernel ARM64 para RPi4
+# initrd.img — initramfs
+# bcm2711-rpi-4-b.dtb — Device Tree para RPi 4 Model B
+# config.txt — configuración del firmware
+# cmdline.txt — parámetros del kernel
+# overlays/ — overlays del Device Tree
+
+# config.txt para netboot NFS:
+cat > /mnt/ssd/netboot/tftp/config.txt << 'EOF'
+[all]
+kernel=kernel8.img
+initramfs initrd.img followkernel
+arm_64bit=1
+auto_initramfs=1
+disable_overscan=1
+EOF
+
+# Crear symlink kernel8.img -> vmlinuz (si vmlinuz es el kernel)
+ln -sf vmlinuz /mnt/ssd/netboot/tftp/kernel8.img
+
+# cmdline.txt para NFS root:
+cat > /mnt/ssd/netboot/tftp/cmdline.txt << 'EOF'
+console=serial0,115200 console=tty1 root=/dev/nfs nfsroot=192.168.1.210:/mnt/ssd/netboot/nfs/worker3,v3,tcp rw ip=dhcp rootwait dwc_otg.lpm_enable=0 cgroup_memory=1 cgroup_enable=memory
+EOF
+```
+
+> **Importante para K3s en RPi4**: si en `/proc/cmdline` aparece `cgroup_disable=memory`,
+> K3s agent falla con `failed to find memory cgroup (v2)`. Debes arrancar con
+> `cgroup_memory=1 cgroup_enable=memory`.
+
+> **NOTA**: La RPi 4 primero busca `<serial_number>/start4.elf` (directorio con su serial).
+> Si no lo encuentra, cae back al directorio raíz del TFTP. Esto es normal — dnsmasq
+> logueará errores `file not found for 192.168.1.213` para el directorio de serial,
+> seguidos de transferencias exitosas desde el root. También verás mensajes
+> `failed sending kernel8.img` seguidos de `sent kernel8.img` — son reintentos normales
+> de la negociación de opciones TFTP.
 
 ---
 
@@ -227,7 +294,93 @@ sudo sed -i 's/worker1/worker2/g' /mnt/ssd/netboot/nfs/worker2/etc/fstab
 
 ---
 
-## Paso 5: Preparar micro-SD Boot Bridge (OPi 5)
+## Paso 5: Preparar arranque de RPi 4 (Worker 3)
+
+La RPi 4 tiene PXE nativo en su EEPROM — **no necesita micro-SD**.
+
+### 5.1 Habilitar netboot en la EEPROM
+
+```bash
+# Desde el sistema operativo corriendo en la RPi 4:
+sudo raspi-config
+# → Advanced Options → Boot Order → Network Boot
+# O directamente:
+rpi-eeprom-config --edit
+# Añadir: BOOT_ORDER=0x21  (SD primero, luego red)
+```
+
+### 5.2 Preparar rootfs NFS
+
+```bash
+# Desde el maestro, copiar rootfs de Raspberry Pi OS a NFS:
+DEBIAN_IMG="raspios_lite_arm64_FECHA.img"
+OFFSET=$(fdisk -l $DEBIAN_IMG | grep Linux | awk '{print $2 * 512}')
+mkdir -p /mnt/tmp_rpi
+sudo mount -o loop,offset=$OFFSET $DEBIAN_IMG /mnt/tmp_rpi
+sudo rsync -axHAWX --numeric-ids /mnt/tmp_rpi/ /mnt/ssd/netboot/nfs/worker3/
+sudo umount /mnt/tmp_rpi
+
+# Modificar fstab para NFS root:
+sudo tee /mnt/ssd/netboot/nfs/worker3/etc/fstab << 'EOF'
+# UUID originales comentados (no aplican en netboot)
+tmpfs /tmp tmpfs defaults,nosuid 0 0
+192.168.1.210:/mnt/ssd/netboot/nfs/worker3 / nfs defaults,v3,tcp 0 0
+EOF
+
+echo "worker3" | sudo tee /mnt/ssd/netboot/nfs/worker3/etc/hostname
+
+# Copiar kernel y firmware al TFTP root:
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/firmware/start4.elf /mnt/ssd/netboot/tftp/
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/firmware/fixup4.dat /mnt/ssd/netboot/tftp/
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/firmware/*.dtb /mnt/ssd/netboot/tftp/
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/firmware/overlays/ /mnt/ssd/netboot/tftp/overlays/ -r
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/vmlinuz-* /mnt/ssd/netboot/tftp/vmlinuz
+sudo cp /mnt/ssd/netboot/nfs/worker3/boot/initrd.img-* /mnt/ssd/netboot/tftp/initrd.img
+sudo ln -sf vmlinuz /mnt/ssd/netboot/tftp/kernel8.img
+```
+
+### 5.3 Verificar boot
+
+```bash
+# Monitorear logs dnsmasq en tiempo real:
+sudo journalctl -u dnsmasq -f | grep -E 'dc:a6:32:e9:2a:be|213|TFTP'
+
+# Secuencia esperada:
+# DHCPDISCOVER → DHCPOFFER (con next server: 192.168.1.210)
+# DHCPREQUEST → DHCPACK ← LA CLAVE: ahora acepta el OFFER
+# TFTP: bootcode.bin / start4.elf / kernel8.img...
+# Segundo DHCP cycle (kernel Linux ya corriendo)
+# rpc.mountd: authenticated mount for /mnt/ssd/netboot/nfs/worker3
+
+# SSH al worker3:
+ssh root@192.168.1.213
+# Interfaz de red: end0 (no eth0) en sistemas con naming persistente
+```
+
+---
+
+## Paso 6: Preparar arranque de OPi 5 (dos métodos)
+
+### Método A — SPI Flash (recomendado, sin micro-SD) ✅ VERIFICADO
+
+Si el worker ya arranca con Armbian (por SD o NFS), se puede grabar U-Boot directamente
+en la memoria SPI interna de la placa. Así arranca sin micro-SD y hace DHCP→TFTP directo.
+
+```bash
+# Desde dentro del worker (por SSH):
+dd if=/usr/lib/linux-u-boot-current-orangepi5/u-boot-rockchip-spi.bin \
+   of=/dev/mtdblock0 conv=notrunc
+sync
+# Salida esperada: ~1.7 MB copiados en ~20s
+```
+
+Después del reboot la placa arranca SPI → DHCP (vendor: U-Boot) → dnsmasq le da
+`worker1/boot.scr` por TFTP → kernel + initrd + dtb por TFTP → NFS root.
+**No necesita micro-SD.**
+
+> **Verificado en Worker 1 (76:86:c1:88:66:d7)** — Abril 2026
+
+### Método B — micro-SD Boot Bridge (fallback)
 
 ```bash
 # Flashear solo los primeros 16MB de la imagen (U-Boot)
@@ -242,20 +395,31 @@ sync
 
 ---
 
-## Paso 6: Verificar el cluster
+## Paso 7: Verificar el cluster
 
 ```bash
 # Ping a todos
 fping 192.168.1.211 192.168.1.212 192.168.1.213
 
-# SSH (Armbian default: root / 1234)
+# SSH a workers OPi 5 (Armbian default: root / 1234 o root / 123456)
 ssh root@192.168.1.211
 ssh root@192.168.1.212
+
+# SSH a worker3 (RPi 4 — password configurado durante setup)
 ssh root@192.168.1.213
 
 # Verificar que el OS corre desde NFS
 ssh root@192.168.1.211 "df -h / && free -h"
 # Filesystem correcto: 192.168.1.210:/mnt/ssd/netboot/nfs/worker1
+
+ssh root@192.168.1.213 "uname -a && df -h / && cat /proc/cpuinfo | grep Model"
+# Esperado:
+# Linux worker3 6.x.x-current-bcm2711 ... aarch64 GNU/Linux
+# 192.168.1.210:/mnt/ssd/netboot/nfs/worker3  886G ...
+# Model: Raspberry Pi 4 Model B Rev 1.4
+
+# Ver todos los mounts NFS activos en el maestro:
+sudo showmount -a
 ```
 
 ---
@@ -284,7 +448,7 @@ sudo systemctl restart dnsmasq nfs-kernel-server
 ## Diagrama de flujo de arranque (OPi 5)
 
 ```
-SD Card (256MB, solo U-Boot)
+SPI Flash (U-Boot, sin micro-SD) ← Método A recomendado
         │
         ▼
   U-Boot arranca
@@ -311,7 +475,44 @@ SD Card (256MB, solo U-Boot)
         │
         ▼
   ¡Sistema operativo corriendo!
-  SSH: root@192.168.1.211 / 1234
+  SSH: root@192.168.1.211
+```
+
+## Diagrama de flujo de arranque (RPi 4)
+
+```
+EEPROM PXE nativo (sin SD, sin SPI flash)
+        │
+        ▼ DHCPDISCOVER (vendor: PXEClient:Arch:00000:UNDI:002001)
+  dnsmasq responde (DHCPOFFER):
+    IP: 192.168.1.213
+    next-server: 192.168.1.210  ← siaddr via dhcp-boot
+    option 66: 192.168.1.210   ← TFTP server (OBLIGATORIO para RPi4)
+    option 67: bootcode.bin
+    option 60: PXEClient       ← echo para validación
+        │
+        ▼ DHCPREQUEST → DHCPACK ← RPi acepta el OFFER
+        │
+        ▼ TFTP busca <serial>/start4.elf → no encontrado (normal)
+        │  cae back al root TFTP:
+        ▼ TFTP descarga:
+    start4.elf + fixup4.dat + config.txt
+    kernel8.img (= vmlinuz, kernel bcm2711)
+    initrd.img + bcm2711-rpi-4-b.dtb
+    overlays/ + cmdline.txt
+        │  (reintentos TFTP son normales — Early terminate luego éxito)
+        ▼
+  Kernel Linux arranca
+        │
+        ▼ DHCP (kernel ip=dhcp, vendor: sin PXEClient)
+  IP confirmada: 192.168.1.213
+        │
+        ▼ NFS mount:
+  192.168.1.210:/nfs/worker3 → /
+        │
+        ▼
+  ¡Sistema operativo corriendo!
+  SSH: root@192.168.1.213  (interfaz de red: end0, no eth0)
 ```
 
 ---
@@ -323,6 +524,50 @@ SD Card (256MB, solo U-Boot)
 | No aparece en dnsmasq log | Sin conexión ethernet | Verificar cable |
 | Busca `pxelinux.cfg/pxelinux.cfg/...` | Doble prefijo por bootfile con directorio | Usar vendor class en dnsmasq |
 | Descarga kernel pero se reinicia | NFS no monta | Verificar fstab y exportfs |
-| `abandoning lease` en log | Normal — el kernel tomó el relevo de U-Boot | Señal positiva |
-| SSH: Permission denied | Contraseña incorrecta | Armbian: root/1234 |
+| `abandoning lease` en log | Normal — el kernel tomó el relevo de U-Boot/EEPROM | Señal positiva |
+| SSH: Permission denied | Contraseña incorrecta | Armbian: root/1234 o root/123456 |
 | SD no arranca U-Boot | GPT corrupta | `parted /dev/sdX mklabel msdos` |
+| **RPi 4**: Loop DISCOVER→OFFER sin REQUEST | Falta option 66 en DHCP OFFER | Añadir `dhcp-option=tag:worker3,66,192.168.1.210` |
+| **RPi 4**: No intenta TFTP | `dhcp-option bootfile-name` no rellena siaddr | Usar `dhcp-boot=tag:worker3,bootcode.bin,,192.168.1.210` |
+| **RPi 4**: `failed sending kernel8.img` | Reintentos de negociación TFTP | Normal — buscar `sent kernel8.img` a continuación |
+| **RPi 4**: Error `file not found` para `e4834e0c/start4.elf` | RPi busca en dir de serial primero | Normal — cae al root TFTP automáticamente |
+| **RPi 4**: Interfaz de red es `end0` no `eth0` | Naming persistente de Debian/Ubuntu | Usar `end0` en comandos de red |
+
+---
+
+## Netboot + K3s en ARM (restricciones validadas)
+
+Para este cluster (OPi5 `rockchip64` y RPi4 `bcm2711`) se validaron estos requisitos
+adicionales para que K3s funcione sobre root NFS:
+
+1. **Sin `ip_tables` en kernel**: usar nftables (`nf_tables`) y forzar binarios iptables de K3s a nft.
+2. **Root sobre NFS**: overlayfs de kernel puede fallar; usar `fuse-overlayfs` como snapshotter.
+3. **RPi4**: habilitar memory cgroups en cmdline para que K3s arranque.
+
+Comandos aplicados en cada worker:
+
+```bash
+# 1) Instalar snapshotter compatible con root NFS
+apt-get install -y fuse-overlayfs
+
+# 2) Forzar k3s-agent a usar fuse-overlayfs + kube-proxy nftables
+mkdir -p /etc/systemd/system/k3s-agent.service.d
+cat > /etc/systemd/system/k3s-agent.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/local/bin/k3s agent --snapshotter=fuse-overlayfs --kube-proxy-arg=proxy-mode=nftables
+EOF
+
+# 3) Cambiar iptables bundled de K3s a xtables-nft-multi
+cd /var/lib/rancher/k3s/data/current/bin/aux
+for i in iptables iptables-save iptables-restore ip6tables ip6tables-save ip6tables-restore; do
+    ln -sf xtables-nft-multi "$i"
+done
+
+systemctl daemon-reload
+systemctl restart k3s-agent
+```
+
+> Nota de persistencia: en este entorno `/var/lib/rancher/k3s` vive en NFS root y
+> los symlinks persisten entre reinicios. Tras actualizaciones de K3s, conviene revalidar
+> que sigan apuntando a `xtables-nft-multi`.
