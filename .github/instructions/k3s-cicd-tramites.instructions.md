@@ -21,9 +21,30 @@ Operador DevOps para K3s ARM netboot con foco en CI/CD GitOps, despliegue de Tra
 - Runtime: .NET 8 ASP.NET Core (linux/arm64)
 - DB: PostgreSQL 17
 - Auth: OIDC/JWT (Keycloak o Zitadel)
-- Registry: Harbor en cluster (`harbor.192.168.1.210.nip.io`)
+- **Registry CI/CD**: `ghcr.io/otoro90/tramites-api` — GitHub Container Registry
+  - Push desde GitHub Actions usando `GITHUB_TOKEN` (sin secrets extra)
+  - Workers pull desde ghcr.io (tienen internet via NAT masquerade del maestro)
+  - ⚠️ NO usar Harbor (imágenes son amd64-only → `exec format error` en ARM64)
+  - ⚠️ NO usar registry LAN para CI (IP `192.168.1.x` no alcanzable desde GitHub Actions)
+- **Registry local**: `registry.192.168.1.210.nip.io` — Docker Registry v2 ARM64-native (solo LAN)
 - GitOps: Argo CD + Kustomize (overlays dev/prod)
 - Image Updater: Argo CD Image Updater (estrategia digest)
+
+### Conectividad internet de workers (CRÍTICO)
+Los workers NO tenían internet hasta que se aplicaron estos dos fixes:
+1. `worker-nat.service` en maestro: `iptables MASQUERADE` para `192.168.1.0/24 → eth0`
+2. `/etc/gai.conf` en cada worker: `precedence ::ffff:0:0/96  100` (IPv4 over IPv6)
+
+Si los workers no pueden hacer pull de imágenes, verificar ambos:
+```bash
+# Fix 1: verificar NAT
+sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
+  "echo 'M1gu3l.1990*' | sudo -S systemctl status worker-nat.service --no-pager"
+
+# Fix 2: verificar gai.conf en worker
+sshpass -p '123456' ssh root@192.168.1.211 "grep precedence /etc/gai.conf"
+# Debe mostrar: precedence ::ffff:0:0/96  100
+```
 
 ### Restricciones críticas de workers ARM NFS
 - Sin `ip_tables`: sólo `nf_tables`. Usar siempre `nftables`.
@@ -123,20 +144,25 @@ cat /etc/systemd/system/k3s-agent.service.d/override.conf
 
 | Secret | Descripción |
 |--------|-------------|
-| `HARBOR_USER` | Usuario Harbor del proyecto tramites |
-| `HARBOR_PASSWORD` | Contraseña/token Harbor |
-| `GITOPS_PAT` | PAT con acceso write al repo GitOps |
+| `GITOPS_PAT` | PAT con `repo` write — dispara `repository_dispatch` en tramites-gitops |
+
+> **NO se necesitan** `HARBOR_USER` ni `HARBOR_PASSWORD`.
+> El push a `ghcr.io` usa `GITHUB_TOKEN` automático (permisos: `packages: write`).
+> Para pull de imágenes privadas en cluster: crear `ghcr-pull-secret` en cada namespace
+> (kubectl create secret docker-registry, PAT con `read:packages`).
 
 ## Pipeline de despliegue completo
 
 ```
 PR → lint + test + build-check
        ↓
-merge main → build arm64 + trivy scan + sbom + cosign sign + push Harbor
+merge main → build arm64 + trivy scan + sbom + cosign sign + push ghcr.io
                ↓
-             update-gitops (bump digest en overlay)
+             update-gitops (bump digest en overlay tramites-gitops)
                ↓
              Argo CD detecta cambio → sync → deploy en K3s
+               ↓
+             Workers pull ghcr.io/otoro90/tramites-api@sha256:<digest>
                ↓
              Validación health (readiness + liveness probes)
 ```
