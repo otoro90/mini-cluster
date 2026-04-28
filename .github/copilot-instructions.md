@@ -69,6 +69,24 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 > ⚠️ NO usar Harbor (imágenes oficiales son amd64-only, no hay ARM64 para Harbor).  
 > ⚠️ NO usar un registry LAN para CI desde GitHub Actions (IP privada no alcanzable).
 
+## GitHub Actions CI/CD — Tramites (configurado Abril 2026)
+
+- **Workflow**: `Tramites/.github/workflows/ci-main.yml` — monorepo, path filter en `Govco.Tramites/**`
+- **Jobs**: `test` → `build-and-push` → `update-gitops`
+- **Secrets configurados en repo Tramites**: `GITOPS_PAT` (PAT con `repo` write para push al mismo monorepo)
+- **Secret Argo CD en cluster**: `argocd-repo-tramites` en namespace `argocd` con label `argocd.argoproj.io/secret-type=repository`
+- **imagePullSecret en cluster**: `ghcr-pull-secret` en namespaces `tramites-dev`, `tramites-prod`, `argocd`
+- **Aplicaciones Argo CD**: `tramites-dev` (auto-sync) + `tramites-prod` (manual) — aplicadas con `kubectl apply -f manifests/tramites/argocd-apps.yaml`
+
+### Gotchas ARM64 en CI (runners amd64 con imagen linux/arm64-only)
+
+| Herramienta | Problema | Solución |
+|-------------|----------|----------|
+| `aquasecurity/trivy-action` | No tiene input `platform:` — lo ignora | Usar `env: TRIVY_PLATFORM: linux/arm64` |
+| `anchore/sbom-action@v0` | No soporta `--platform` | Usar `syft scan --platform linux/arm64` directo en `run:` |
+| `sed` con `\|` como delimitador | `\|` de alternancia regex se confunde con delimitador | Usar `#` como delimitador: `s#patron(a\|b)#reemplazo#` |
+| `update-gitops` job | NO usa `repository_dispatch` — hace checkout directo del monorepo | El script `scripts/update-digest.sh` se llama directamente con `GITOPS_PAT` |
+
 ## Comandos frecuentes
 
 ```bash

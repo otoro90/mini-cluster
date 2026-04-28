@@ -144,10 +144,42 @@ cat /etc/systemd/system/k3s-agent.service.d/override.conf
 
 | Secret | Descripción |
 |--------|-------------|
-| `GITOPS_PAT` | PAT con `repo` write — dispara `repository_dispatch` en tramites-gitops |
+| `GITOPS_PAT` | PAT con `repo` write — usado en job `update-gitops` para checkout + push al mismo monorepo |
 
 > **NO se necesitan** `HARBOR_USER` ni `HARBOR_PASSWORD`.
 > El push a `ghcr.io` usa `GITHUB_TOKEN` automático (permisos: `packages: write`).
+> El `GITOPS_PAT` NO dispara `repository_dispatch` — hace directamente git clone + push
+> en el job `update-gitops` del mismo workflow (`ci-main.yml`).
+
+---
+
+## Gotchas ARM64 en CI (runners amd64 con imagen linux/arm64)
+
+### Trivy: `no child with platform linux/amd64 in index`
+Usar `env: TRIVY_PLATFORM: linux/arm64` en el step — el input `platform:` en `with:` **no existe** y se ignora.
+
+### Syft / anchore/sbom-action: mismo problema
+`anchore/sbom-action@v0` no tiene input de plataforma. Usar syft directamente:
+```bash
+syft scan --platform linux/arm64 "ghcr.io/otoro90/tramites-api@<digest>" -o spdx-json --file sbom.spdx.json
+```
+
+### sed en update-digest.sh: `unknown option to 's'`
+Usar `#` como delimitador sed si el patrón contiene `|` (alternancia regex):
+```bash
+# ❌ FALLA
+sed -i -E "s|digest: sha256:(PLACEHOLDER|[a-f0-9]{64})|digest: ${DIGEST}|g"
+# ✅ CORRECTO
+sed -i -E "s#digest: sha256:(PLACEHOLDER|[a-f0-9]{64})#digest: ${DIGEST}#"
+```
+
+### Argo CD: autenticación a repo privado
+Requiere Secret en namespace `argocd` con label `argocd.argoproj.io/secret-type=repository`.
+Nombre: `argocd-repo-tramites`.
+
+### deployment.yaml: imagePullSecrets duplicado
+Kustomize falla con `mapping key already defined`. Verificar que solo existe UN bloque
+`imagePullSecrets` en `gitops/base/deployment.yaml` apuntando a `ghcr-pull-secret`.
 > Para pull de imágenes privadas en cluster: crear `ghcr-pull-secret` en cada namespace
 > (kubectl create secret docker-registry, PAT con `read:packages`).
 
