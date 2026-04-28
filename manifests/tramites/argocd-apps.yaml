@@ -1,0 +1,96 @@
+---
+# Namespace para Tramites dev
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tramites-dev
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+# Namespace para Tramites prod
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tramites-prod
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+# Aplicación dev — Argo CD sincroniza automáticamente
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tramites-dev
+  namespace: argocd
+  labels:
+    app: tramites
+    env: dev
+  annotations:
+    # Argo CD Image Updater: rastrear digest de la imagen
+    argocd-image-updater.argoproj.io/image-list: "api=harbor.192.168.1.210.nip.io/tramites/api"
+    argocd-image-updater.argoproj.io/api.update-strategy: digest
+    argocd-image-updater.argoproj.io/api.allow-tags: "regexp:^sha-"
+    # Write-back: el updater actualiza el kustomization.yaml en el repo
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: main
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Repositorio GitOps (puede ser el mismo Tramites repo o uno separado)
+    repoURL: https://github.com/otoro90/Tramites.git
+    targetRevision: main
+    path: gitops/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tramites-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 5
+---
+# Aplicación prod — sync manual para mayor control
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tramites-prod
+  namespace: argocd
+  labels:
+    app: tramites
+    env: prod
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/otoro90/Tramites.git
+    targetRevision: main
+    path: gitops/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tramites-prod
+  syncPolicy:
+    # Prod: sync manual — operador aprueba explícitamente
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ServerSideApply=true
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 10
