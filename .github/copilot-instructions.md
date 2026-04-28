@@ -60,7 +60,7 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 
 | Componente | URL / Acceso | Credenciales | Notas |
 |-----------|--------------|--------------|-------|
-| Argo CD | `http://argocd.local` (añadir a `/etc/hosts`) | admin / `ipb4EnoshkInEr4g` | Helm `argo/argo-cd`, todos los pods en orangepi6plus |
+| Argo CD v3.3.8 | `http://argocd.local` (añadir a `/etc/hosts`) | admin / `ipb4EnoshkInEr4g` | Helm `argo/argo-cd`, todos los pods en orangepi6plus |
 | Docker Registry v2 | `http://registry.192.168.1.210.nip.io` | admin / Registry12345 | Solo LAN — ARM64-native (`registry:2`) |
 | ingress-nginx | `192.168.1.210:80/443` | — | DaemonSet hostNetwork en orangepi6plus |
 | local-path-provisioner | StorageClass `local-path` (default) | — | PVCs en `/mnt/ssd/k8s-volumes` en orangepi6plus |
@@ -129,6 +129,73 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 | `update-gitops` job | NO usa `repository_dispatch` — hace checkout directo del monorepo | El script `scripts/update-digest.sh` se llama directamente con `GITOPS_PAT` |
 | `Dockerfile.frontend` stage Angular | `node:22-alpine` no es ARM64 nativo en CI | Usar `FROM --platform=$BUILDPLATFORM node:22-alpine` — archivos estáticos son arch-agnósticos |
 | `update-digest.sh` múltiples imágenes | `sed` remplazaría ambos `digest:` | Usar `awk` con context-matching por nombre de imagen |
+
+## Kustomize — Reglas críticas (lecciones aprendidas Abril 2026)
+
+> **Verificado con documentación oficial Kustomize y context7.**
+
+### NUNCA usar `commonLabels` si ya existen Deployments/StatefulSets
+
+`commonLabels` es equivalente a `labels` con `includeSelectors: true`. Agrega labels a `spec.selector.matchLabels` de Deployments y StatefulSets — campo **inmutable** en Kubernetes. Si el recurso ya existe, K8s rechazará el update con error de inmutabilidad.
+
+**Usar siempre:**
+```yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: tramites
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false   # NO tocar spec.selector
+    includeTemplates: false   # NO agregar a pod templates (opcional: true si se quiere en pods)
+```
+
+### StatefulSet `volumeClaimTemplates` — ignoreDifferences obligatorio en Argo CD
+
+Kubernetes agrega automáticamente `apiVersion: v1`, `kind: PersistentVolumeClaim` y `status: {phase: Pending}` al live state de `spec.volumeClaimTemplates`. El manifiesto deseado no los incluye → Argo CD ve diff permanente.
+
+**Fix obligatorio en `argocd-apps.yaml`:**
+```yaml
+ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    name: postgres
+    jqPathExpressions:
+      - .spec.volumeClaimTemplates[]?.status
+      - .spec.volumeClaimTemplates[]?.apiVersion
+      - .spec.volumeClaimTemplates[]?.kind
+```
+Más `RespectIgnoreDifferences=true` en `syncOptions` — sin esto, Argo CD ignora el diff en la UI pero sigue intentando sincronizarlo.
+
+### Estructura gitops tramites (verificada operacional Abril 2026)
+
+```
+Tramites/gitops/
+├── base/
+│   ├── kustomization.yaml          # labels(includeSelectors:false), lista recursos
+│   ├── deployment.yaml             # tramites-api, selector: app=tramites-api
+│   ├── service.yaml                # selector: app=tramites-api
+│   ├── configmap.yaml
+│   ├── ingress.yaml
+│   ├── frontend/
+│   │   ├── deployment.yaml         # selector: app=tramites-frontend
+│   │   └── service.yaml
+│   ├── frontend-env-configmap.yaml
+│   ├── ingress-frontend.yaml
+│   └── postgres/
+│       ├── statefulset.yaml        # selector: app=postgres, nodeSelector: orangepi6plus
+│       └── service.yaml
+└── overlays/
+    ├── dev/
+    │   └── kustomization.yaml      # ns=tramites-dev, secrets, patches replicas=1
+    └── prod/
+        └── kustomization.yaml      # ns=tramites-prod, digest:sha256 (actualizado por CI)
+```
+
+### /etc/hosts en cliente Mac (añadido Abril 2026)
+```
+192.168.1.210  tramites-dev.local tramites-api-dev.local
+192.168.1.210  tramites.forjanova.local tramites-api.forjanova.local
+192.168.1.210  argocd.local registry.192.168.1.210.nip.io
+```
 
 ## Comandos frecuentes
 

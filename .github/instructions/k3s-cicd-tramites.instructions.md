@@ -198,6 +198,111 @@ Nombre: `argocd-repo-tramites`.
 ### deployment.yaml: imagePullSecrets duplicado
 Kustomize falla con `mapping key already defined`. Verificar que solo existe UN bloque
 `imagePullSecrets` en `gitops/base/deployment.yaml` apuntando a `ghcr-pull-secret`.
+
+---
+
+## Kustomize — Reglas críticas (verificadas con context7 Abril 2026)
+
+### NUNCA usar `commonLabels` en base si ya existen recursos
+
+`commonLabels` ≡ `labels` con `includeSelectors: true`. Añade labels a `spec.selector.matchLabels`
+(campo **inmutable** en Kubernetes). Si el recurso ya existe → K8s rechaza el update.
+
+**Problema real observado:** `commonLabels` añadió `app.kubernetes.io/name: tramites` al selector
+del Service `tramites-api`, pero los pods tenían `app.kubernetes.io/name: tramites-api` → endpoints
+vacíos → HTTP 503 en la API.
+
+**Usar siempre:**
+```yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: tramites
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false   # ← no tocar spec.selector
+    includeTemplates: false
+```
+
+**Si los recursos ya existen con selector viejo (requieren recreación):**
+```bash
+kubectl delete deployment tramites-api tramites-frontend -n tramites-dev
+kubectl delete statefulset postgres -n tramites-dev
+# Argo CD auto-sync los recrea automáticamente
+```
+
+### StatefulSet volumeClaimTemplates — ignoreDifferences obligatorio en Argo CD
+
+Kubernetes añade al live object: `apiVersion: v1`, `kind: PersistentVolumeClaim`, `status: {phase: Pending}`
+a cada entry de `spec.volumeClaimTemplates`. El manifiesto no los incluye → OutOfSync permanente.
+
+**Fix obligatorio en argocd-apps.yaml (confirmado con Argo CD docs v3.3.8):**
+```yaml
+ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    name: postgres
+    jqPathExpressions:
+      - .spec.volumeClaimTemplates[]?.status
+      - .spec.volumeClaimTemplates[]?.apiVersion
+      - .spec.volumeClaimTemplates[]?.kind
+syncPolicy:
+  syncOptions:
+    - RespectIgnoreDifferences=true  # ← sin esto el ignore solo afecta la UI, no el sync
+```
+
+### Verificar output de Kustomize antes de aplicar
+```bash
+kubectl kustomize gitops/overlays/dev | python3 -c "
+import sys, yaml, json
+for d in yaml.safe_load_all(sys.stdin):
+    if d and d.get('kind') in ['Deployment','StatefulSet','Service']:
+        print(d['kind'], d['metadata']['name'], json.dumps(d['spec'].get('selector',{})))
+"
+```
+
+---
+
+## Estado operacional tramites-dev (verificado Abril 2026)
+
+```
+tramites-dev  Synced  Healthy
+├── postgres-0            1/1 Running  orangepi6plus  (StatefulSet, PVC local-path 5Gi)
+├── tramites-api-xxx      1/1 Running  worker3        (ghcr.io/otoro90/tramites-api)
+└── tramites-frontend-xxx 1/1 Running  worker2        (ghcr.io/otoro90/tramites-frontend)
+
+Endpoints:
+  postgres:           10.42.0.20:5432
+  tramites-api:       10.42.3.8:8080
+  tramites-frontend:  10.42.2.30:80
+
+Acceso (requiere /etc/hosts → 192.168.1.210):
+  http://tramites-api-dev.local  → Healthy ✅
+  http://tramites-dev.local      → Angular HTML ✅
+```
+
+## Diagnóstico rápido Argo CD
+
+```bash
+# Sync y health de todas las apps
+sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
+  "echo 'M1gu3l.1990*' | sudo -S bash -c '
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application -n argocd \
+      -o custom-columns=\"NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status\"
+  '"
+
+# Qué recursos están OutOfSync
+sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
+  "echo 'M1gu3l.1990*' | sudo -S bash -c '
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application tramites-dev -n argocd \
+      -o jsonpath=\"{.status.resources[*]}\" | tr \"{\" \"\\n\" | grep OutOfSync
+  '"
+
+# Hard refresh para forzar re-evaluación
+sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
+  "echo 'M1gu3l.1990*' | sudo -S bash -c '
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl annotate application tramites-dev \
+      -n argocd argocd.argoproj.io/refresh=hard --overwrite
+  '"
+```
 > Para pull de imágenes privadas en cluster: crear `ghcr-pull-secret` en cada namespace
 > (kubectl create secret docker-registry, PAT con `read:packages`).
 

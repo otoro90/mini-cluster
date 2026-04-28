@@ -428,3 +428,143 @@ Verificar que solo existe UN bloque `imagePullSecrets` en `gitops/base/deploymen
 23 tests de `ConfiguracionTramite` fallan por un bug de lógica preexistente.
 Se usa `continue-on-error: true` temporalmente en el step de tests para desbloquear
 el pipeline de build/deploy. **TODO**: corregir en `UnitTests/Application/Features/Tramites`.
+
+---
+
+## 11. Kustomize — Reglas críticas (lecciones aprendidas Abril 2026)
+
+> **Verificado con documentación oficial Kustomize (kubernetes-sigs/kustomize) y Argo CD docs (argo-cd.readthedocs.io).**
+
+### 11.1 NUNCA usar `commonLabels` si ya existen Deployments/StatefulSets
+
+`commonLabels` es equivalente a `labels` con `includeSelectors: true`. Agrega labels a `spec.selector.matchLabels` de Deployments y StatefulSets — campo **inmutable** en Kubernetes. Si el recurso ya existe, K8s rechazará el update.
+
+**Consecuencia en producción observada (Abril 2026):**
+- `commonLabels` añadió `app.kubernetes.io/name: tramites` al selector del Service `tramites-api`
+- Los pods tenían `app.kubernetes.io/name: tramites-api` (distinto) → endpoints vacíos → 503
+
+**Solución correcta:**
+```yaml
+# base/kustomization.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/name: tramites
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false   # ← crítico: NO tocar spec.selector
+    includeTemplates: false
+```
+
+Si los Deployments/StatefulSets ya existen con el selector viejo, deben recrearse:
+```bash
+kubectl delete deployment tramites-api tramites-frontend -n tramites-dev
+kubectl delete statefulset postgres -n tramites-dev
+# Argo CD (auto-sync) los recrea automáticamente
+```
+
+### 11.2 StatefulSet `volumeClaimTemplates` — ignoreDifferences obligatorio
+
+Kubernetes agrega automáticamente al live object de StatefulSet:
+```yaml
+spec:
+  volumeClaimTemplates:
+    - apiVersion: v1                    # ← añadido por K8s
+      kind: PersistentVolumeClaim       # ← añadido por K8s
+      status:
+        phase: Pending                  # ← añadido por K8s
+```
+
+Estos campos no están en el manifiesto deseado → Argo CD los ve como diff permanente
+→ OutOfSync infinito que no se puede resolver con sync normal.
+
+**Fix en `manifests/tramites/argocd-apps.yaml`:**
+```yaml
+spec:
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      name: postgres
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.status
+        - .spec.volumeClaimTemplates[]?.apiVersion
+        - .spec.volumeClaimTemplates[]?.kind
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true  # ← obligatorio para que el ignore aplique en sync
+```
+
+> **Confirmado por Argo CD docs**: `ignoreDifferences` solo afecta la comparación visual.
+> `RespectIgnoreDifferences=true` es necesario para que también aplique durante el sync
+> y Argo CD no intente reconciliar los campos ignorados.
+
+### 11.3 Estructura gitops tramites (operacional Abril 2026)
+
+```
+Tramites/gitops/
+├── base/
+│   ├── kustomization.yaml          # labels(includeSelectors:false)
+│   ├── deployment.yaml             # tramites-api, selector: {app: tramites-api}
+│   ├── service.yaml                # selector: {app: tramites-api}
+│   ├── configmap.yaml
+│   ├── ingress.yaml
+│   ├── frontend/
+│   │   ├── deployment.yaml         # selector: {app: tramites-frontend}
+│   │   └── service.yaml
+│   ├── frontend-env-configmap.yaml
+│   ├── ingress-frontend.yaml
+│   └── postgres/
+│       ├── statefulset.yaml        # selector: {app: postgres}, nodeSelector: orangepi6plus
+│       └── service.yaml
+└── overlays/
+    ├── dev/
+    │   └── kustomization.yaml      # ns=tramites-dev, secretGenerator, patches
+    └── prod/
+        └── kustomization.yaml      # ns=tramites-prod, digest:sha256 (actualizado por CI)
+```
+
+### 11.4 Verificar salida de Kustomize antes de aplicar
+
+```bash
+cd Tramites
+kubectl kustomize gitops/overlays/dev | python3 -c "
+import sys, yaml, json
+docs = list(yaml.safe_load_all(sys.stdin))
+for d in docs:
+    if d and d.get('kind') in ['Deployment', 'StatefulSet', 'Service']:
+        name = d['metadata']['name']
+        sel = d['spec'].get('selector', {})
+        print(f'{d[\"kind\"]}/{name}: selector={json.dumps(sel)}')
+"
+# Verificar que los selectores de Services coinciden con labels de pod templates
+```
+
+---
+
+## 12. Estado verificado del despliegue (Abril 2026)
+
+### tramites-dev ✅ Synced / Healthy
+
+| Recurso | Estado | Nodo | IP Pod |
+|---------|--------|------|--------|
+| postgres-0 (StatefulSet) | 1/1 Running | orangepi6plus | 10.42.0.20 |
+| tramites-api-xxx (Deployment) | 1/1 Running | worker3 | 10.42.3.8 |
+| tramites-frontend-xxx (Deployment) | 1/1 Running | worker2 | 10.42.2.30 |
+
+**Acceso verificado:**
+- API health: `curl -H 'Host: tramites-api-dev.local' http://192.168.1.210/health` → `Healthy`
+- Frontend: `curl -H 'Host: tramites-dev.local' http://192.168.1.210/` → HTML Angular
+
+**Secrets en namespace tramites-dev:**
+- `ghcr-pull-secret` (docker-registry) — pull de ghcr.io
+- `postgres-credentials` (Opaque) — contraseña postgres dev
+- `tramites-secrets` (Opaque) — connection string + OIDC config
+
+### tramites-prod ⏳ Pendiente sync manual
+
+Configurado con sync manual. Para desplegar:
+```bash
+sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
+  "echo 'M1gu3l.1990*' | sudo -S bash -c '
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl patch application tramites-prod -n argocd \
+      --type=merge -p \"{\\\"operation\\\":{\\\"sync\\\":{\\\"prune\\\":true}}}\"
+  '"
+```
