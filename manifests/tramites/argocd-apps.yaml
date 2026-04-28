@@ -55,6 +55,7 @@ spec:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 3
       backoff:
@@ -62,16 +63,16 @@ spec:
         factor: 2
         maxDuration: 3m
   revisionHistoryLimit: 5
-  # Ignorar spec.selector en StatefulSet postgres — campo inmutable,
-  # commonLabels de Kustomize lo incluye pero no se puede parchear post-creación
+  # Argo CD añade status/apiVersion/kind a volumeClaimTemplates en el live state
+  # — estos campos no están en el manifiesto deseado y causan OutOfSync permanente
   ignoreDifferences:
     - group: apps
       kind: StatefulSet
       name: postgres
-      jsonPointers:
-        - /spec/selector
-        - /spec/template/metadata/labels/app.kubernetes.io~1managed-by
-        - /spec/template/metadata/labels/app.kubernetes.io~1name
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.status
+        - .spec.volumeClaimTemplates[]?.apiVersion
+        - .spec.volumeClaimTemplates[]?.kind
 ---
 # Aplicación prod — sync manual para mayor control
 apiVersion: argoproj.io/v1alpha1
@@ -99,6 +100,7 @@ spec:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 2
       backoff:
@@ -110,7 +112,7 @@ spec:
     - group: apps
       kind: StatefulSet
       name: postgres
-      jsonPointers:
-        - /spec/selector
-        - /spec/template/metadata/labels/app.kubernetes.io~1managed-by
-        - /spec/template/metadata/labels/app.kubernetes.io~1name
+      jqPathExpressions:
+        - .spec.volumeClaimTemplates[]?.status
+        - .spec.volumeClaimTemplates[]?.apiVersion
+        - .spec.volumeClaimTemplates[]?.kind
