@@ -65,18 +65,59 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 | ingress-nginx | `192.168.1.210:80/443` | — | DaemonSet hostNetwork en orangepi6plus |
 | local-path-provisioner | StorageClass `local-path` (default) | — | PVCs en `/mnt/ssd/k8s-volumes` en orangepi6plus |
 
-**Registry CI/CD**: `ghcr.io/otoro90/tramites-api` — GitHub Container Registry  
+**Imágenes CI/CD** (GitHub Container Registry — ARM64, alcanzable desde workers vía internet):
+- Backend API: `ghcr.io/otoro90/tramites-api`
+- Frontend: `ghcr.io/otoro90/tramites-frontend`
+
 > ⚠️ NO usar Harbor (imágenes oficiales son amd64-only, no hay ARM64 para Harbor).  
 > ⚠️ NO usar un registry LAN para CI desde GitHub Actions (IP privada no alcanzable).
 
-## GitHub Actions CI/CD — Tramites (configurado Abril 2026)
+## Stack de aplicación Tramites en cluster (Abril 2026)
+
+| Recurso | Namespace dev | Notas |
+|---------|--------------|-------|
+| PostgreSQL StatefulSet | `tramites-dev` / `tramites-prod` | `postgres:16-alpine`, PVC `local-path` 5Gi dev / 20Gi prod, **solo en orangepi6plus** |
+| Backend API (.NET 8) | `tramites-dev` / `tramites-prod` | `ghcr.io/otoro90/tramites-api`, puerto 8080, EF Core migrations al arrancar |
+| Frontend Angular 19 | `tramites-dev` / `tramites-prod` | `ghcr.io/otoro90/tramites-frontend`, nginx con `env.json` desde ConfigMap |
+| tramites-secrets | `tramites-dev` / `tramites-prod` | Generado por Kustomize secretGenerator (`disableNameSuffixHash: true`) |
+| postgres-credentials | `tramites-dev` / `tramites-prod` | Generado por Kustomize secretGenerator |
+
+**URLs en dev (añadir a `/etc/hosts → 192.168.1.210`):**
+- Frontend: `http://tramites-dev.local`
+- API: `http://tramites-api-dev.local`
+
+**URLs en prod (añadir a `/etc/hosts → 192.168.1.210`):**
+- Frontend: `http://tramites.forjanova.local`
+- API: `http://tramites-api.forjanova.local`
+
+**PostgreSQL en cluster** (ya NO usa Render.com):
+- Connection string: `Host=postgres;Port=5432;Database=tramitesdb;Username=tramites;Password=<overlay>;SSL Mode=Disable`
+- El pod postgres corre **solo en `orangepi6plus`** (`nodeSelector: kubernetes.io/hostname: orangepi6plus`) para aprovechar el SSD
+- `PGDATA=/var/lib/postgresql/data/pgdata` (subdirectorio para evitar conflictos con el mountpoint)
+
+**Configuración runtime del frontend** (sin rebuild por env):
+- Angular carga `/assets/env.json` en `main.ts` → `window.__env`
+- `AppConfigService` fusiona `environment.ts` (build-time fallback) con `window.__env` (runtime override)
+- En K8s: ConfigMap `tramites-frontend-env` montado con `subPath: env.json` → `/usr/share/nginx/html/assets/env.json`
+
+## GitHub Actions CI/CD — Tramites (actualizado Abril 2026)
 
 - **Workflow**: `Tramites/.github/workflows/ci-main.yml` — monorepo, path filter en `Govco.Tramites/**`
-- **Jobs**: `test` → `build-and-push` → `update-gitops`
+- **Jobs**: `test` → `build-and-push` (API) + `build-frontend` (paralelo) → `update-gitops`
 - **Secrets configurados en repo Tramites**: `GITOPS_PAT` (PAT con `repo` write para push al mismo monorepo)
 - **Secret Argo CD en cluster**: `argocd-repo-tramites` en namespace `argocd` con label `argocd.argoproj.io/secret-type=repository`
 - **imagePullSecret en cluster**: `ghcr-pull-secret` en namespaces `tramites-dev`, `tramites-prod`, `argocd`
 - **Aplicaciones Argo CD**: `tramites-dev` (auto-sync) + `tramites-prod` (manual) — aplicadas con `kubectl apply -f manifests/tramites/argocd-apps.yaml`
+
+### Script update-digest.sh (nueva firma)
+
+```bash
+# Un componente
+./scripts/update-digest.sh prod api:sha256:abc...
+
+# Ambos en una sola pasada (un solo clone + push)
+./scripts/update-digest.sh prod api:sha256:abc... frontend:sha256:def...
+```
 
 ### Gotchas ARM64 en CI (runners amd64 con imagen linux/arm64-only)
 
@@ -86,6 +127,8 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 | `anchore/sbom-action@v0` | No soporta `--platform` | Usar `syft scan --platform linux/arm64` directo en `run:` |
 | `sed` con `\|` como delimitador | `\|` de alternancia regex se confunde con delimitador | Usar `#` como delimitador: `s#patron(a\|b)#reemplazo#` |
 | `update-gitops` job | NO usa `repository_dispatch` — hace checkout directo del monorepo | El script `scripts/update-digest.sh` se llama directamente con `GITOPS_PAT` |
+| `Dockerfile.frontend` stage Angular | `node:22-alpine` no es ARM64 nativo en CI | Usar `FROM --platform=$BUILDPLATFORM node:22-alpine` — archivos estáticos son arch-agnósticos |
+| `update-digest.sh` múltiples imágenes | `sed` remplazaría ambos `digest:` | Usar `awk` con context-matching por nombre de imagen |
 
 ## Comandos frecuentes
 

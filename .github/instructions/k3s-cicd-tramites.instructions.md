@@ -19,16 +19,19 @@ Operador DevOps para K3s ARM netboot con foco en CI/CD GitOps, despliegue de Tra
 
 ### Stack Tramites
 - Runtime: .NET 8 ASP.NET Core (linux/arm64)
-- DB: PostgreSQL 17
-- Auth: OIDC/JWT (Keycloak o Zitadel)
-- **Registry CI/CD**: `ghcr.io/otoro90/tramites-api` — GitHub Container Registry
-  - Push desde GitHub Actions usando `GITHUB_TOKEN` (sin secrets extra)
+- DB: PostgreSQL 16-alpine — **en cluster** (StatefulSet en orangepi6plus, local-path PVC)
+- Auth: OIDC/JWT (Keycloak/authserver.govcotestauth.dns-cloud.net)
+- Frontend: Angular 19, nginx, `env.json` ConfigMap para config runtime
+- **Imágenes CI/CD** (GitHub Container Registry — ARM64):
+  - API: `ghcr.io/otoro90/tramites-api`
+  - Frontend: `ghcr.io/otoro90/tramites-frontend`
+  - Push desde GitHub Actions usando `GITHUB_TOKEN`
   - Workers pull desde ghcr.io (tienen internet via NAT masquerade del maestro)
   - ⚠️ NO usar Harbor (imágenes son amd64-only → `exec format error` en ARM64)
   - ⚠️ NO usar registry LAN para CI (IP `192.168.1.x` no alcanzable desde GitHub Actions)
 - **Registry local**: `registry.192.168.1.210.nip.io` — Docker Registry v2 ARM64-native (solo LAN)
 - GitOps: Argo CD + Kustomize (overlays dev/prod)
-- Image Updater: Argo CD Image Updater (estrategia digest)
+- **Secrets en gitops** (lab): Kustomize `secretGenerator` con `disableNameSuffixHash: true`
 
 ### Conectividad internet de workers (CRÍTICO)
 Los workers NO tenían internet hasta que se aplicaron estos dos fixes:
@@ -151,6 +154,13 @@ cat /etc/systemd/system/k3s-agent.service.d/override.conf
 > El `GITOPS_PAT` NO dispara `repository_dispatch` — hace directamente git clone + push
 > en el job `update-gitops` del mismo workflow (`ci-main.yml`).
 
+### Jobs CI: `test` → `build-and-push` (API) + `build-frontend` (paralelo) → `update-gitops`
+
+```bash
+# update-digest.sh — nueva firma soporta múltiples componentes en una pasada:
+./scripts/update-digest.sh prod api:sha256:abc... frontend:sha256:def...
+```
+
 ---
 
 ## Gotchas ARM64 en CI (runners amd64 con imagen linux/arm64)
@@ -164,13 +174,21 @@ Usar `env: TRIVY_PLATFORM: linux/arm64` en el step — el input `platform:` en `
 syft scan --platform linux/arm64 "ghcr.io/otoro90/tramites-api@<digest>" -o spdx-json --file sbom.spdx.json
 ```
 
-### sed en update-digest.sh: `unknown option to 's'`
-Usar `#` como delimitador sed si el patrón contiene `|` (alternancia regex):
+### sed en update-digest.sh con múltiples imágenes
+Usar `awk` con context-matching — sed no puede actualizar solo el digest de la imagen correcta:
 ```bash
-# ❌ FALLA
-sed -i -E "s|digest: sha256:(PLACEHOLDER|[a-f0-9]{64})|digest: ${DIGEST}|g"
-# ✅ CORRECTO
-sed -i -E "s#digest: sha256:(PLACEHOLDER|[a-f0-9]{64})#digest: ${DIGEST}#"
+# ✅ awk busca la línea 'name: <imagen>' y luego actualiza el 'digest:' siguiente
+awk -v img="ghcr.io/otoro90/tramites-api" -v digest="sha256:..." '
+  /name:/ && index($0, img) { found=1 }
+  found && /digest: sha256:/ { sub(/digest: sha256:.*/, "digest: " digest); found=0 }
+  { print }
+' kustomization.yaml
+```
+
+### Dockerfile.frontend: node cross-compile
+```dockerfile
+# ✅ $BUILDPLATFORM (amd64 del runner) para la etapa node — archivos estáticos son arch-agnósticos
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 ```
 
 ### Argo CD: autenticación a repo privado
