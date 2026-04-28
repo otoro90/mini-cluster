@@ -25,3 +25,11 @@ Reglas:
    - symlinks `xtables-nft-multi`
 4. Si hay errores de memory cgroup en RPi4, revisar `/proc/cmdline` y TFTP `cmdline.txt`.
 5. Resume siempre con: problema, cambio aplicado, validación final.
+
+Credenciales SSH:
+Maestro:
+- Usuario: `orangepi`
+- Contraseña: `M1gu3l.1990*`
+Workers:
+- Usuario: `root`
+- Contraseña: `123456`
