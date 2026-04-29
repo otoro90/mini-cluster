@@ -153,3 +153,77 @@ Debe resolver a `xtables-nft-multi`.
 - `TCP 10250` (kubelet API/metrics entre nodos)
 
 Si usas otro CNI, ajusta según corresponda.
+
+---
+
+## 9. Optimización de tiempos de boot (verificado Abril 2026)
+
+### Tiempos medidos antes/después
+
+| Worker | Antes | Después |
+|---|---|---|
+| worker1/2 (OPi5 RK3588) | ~3-4 min | **~2 min** |
+| worker3 (RPi4 BCM2711) | ~2-3 min | **~1 min 10 seg** |
+| maestro (OPi6+ CIX P1) | ~23 seg | **~5-6 seg** (próx. reboot) |
+
+### Maestro — servicios masked (efecto en próximo reboot)
+
+```bash
+# Elimina 17+ segundos de espera al boot
+sudo systemctl mask \
+  chrony-wait.service \
+  rtkit-daemon.service \
+  accounts-daemon.service \
+  power-profiles-daemon.service \
+  loadcpufreq.service \
+  cpufrequtils.service \
+  systemd-udev-settle.service
+```
+
+> **⚠️ Armbian en OPi6+**: NO recomendado. El SoC es **CIX P1 CD8160** — chip propietario
+> sin soporte en Armbian. El kernel `6.1.44-cix` es el único BSP existente.
+
+### Workers OPi5 — boot.cmd optimizado
+
+El cambio de mayor impacto es `tftpblocksize`: pasa de 512 bytes (defecto) a 65464 bytes,
+reduciendo los round-trips para transferir 58MB de ~120,000 a ~600 paquetes UDP.
+
+```bash
+# /mnt/ssd/netboot/tftp/workerX/boot.cmd
+setenv tftpblocksize 65464
+setenv tftpwindowsize 8
+setenv bootargs "root=/dev/nfs nfsroot=192.168.1.210:/mnt/ssd/netboot/nfs/workerX,v3,tcp,nolock,rsize=131072,wsize=131072,timeo=600 rw ip=dhcp rootwait quiet console=ttyS2,1500000"
+tftp ${kernel_addr_r} workerX/vmlinuz
+tftp ${fdt_addr_r} workerX/dtb/rockchip/rk3588s-orangepi-5.dtb
+tftp ${ramdisk_addr_r} workerX/initrd.img
+booti ${kernel_addr_r} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r}
+```
+
+Regenerando boot.scr tras editar boot.cmd:
+
+```bash
+mkimage -C none -A arm64 -T script -d /mnt/ssd/netboot/tftp/workerX/boot.cmd \
+        /mnt/ssd/netboot/tftp/workerX/boot.scr
+```
+
+### Workers OPi5 — servicios masked en NFS root
+
+```bash
+# Ejecutar en el maestro (modifica el NFS root del worker)
+for w in worker1 worker2; do
+  NFSROOT="/mnt/ssd/netboot/nfs/${w}/etc/systemd/system"
+  sudo ln -sf /dev/null "${NFSROOT}/bluetooth-hciattach.service"
+  sudo ln -sf /dev/null "${NFSROOT}/wpa_supplicant.service"
+  sudo ln -sf /dev/null "${NFSROOT}/ModemManager.service"
+  sudo ln -sf /dev/null "${NFSROOT}/avahi-daemon.service"
+  sudo ln -sf /dev/null "${NFSROOT}/avahi-daemon.socket"
+done
+```
+
+### NFS server — más threads para boot simultáneo de 3 workers
+
+```bash
+# /etc/default/nfs-kernel-server
+RPCNFSDCOUNT=16   # default: 8
+sudo systemctl restart nfs-kernel-server
+```

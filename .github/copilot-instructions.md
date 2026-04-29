@@ -45,6 +45,20 @@ Cluster Kubernetes K3s de 3 nodos ARM en red local. Los 3 workers arrancan por r
 - Workers OPi5: botan SPI Flash → U-Boot → TFTP → NFS
 - Worker RPi4: EEPROM PXE nativo → TFTP → NFS (requiere DHCP option 66 + dhcp-boot para siaddr)
 
+**Tiempos de boot tras optimización (Abril 2026):**
+- Workers OPi5 (worker1/2): **~2 min** (antes 3-4 min)
+- Worker RPi4 (worker3): **~1 min 10 seg**
+- Maestro OPi6+: **~5-6 seg** (antes 23 seg — tras mask de servicios desktop)
+
+**Optimizaciones aplicadas (permanentes en disco/NFS root):**
+- `tftpblocksize 65464` + `tftpwindowsize 8` en `boot.cmd` de OPi5 (mayor impacto)
+- NFS mount con `rsize=131072,wsize=131072` en `boot.cmd`
+- `RPCNFSDCOUNT=16` en maestro
+- Masked en workers: `bluetooth-hciattach`, `wpa_supplicant`, `avahi-daemon`
+- Masked en maestro: `chrony-wait`, `rtkit-daemon`, `accounts-daemon`, `power-profiles-daemon`, `loadcpufreq`, `cpufrequtils`, `systemd-udev-settle`
+
+> ⚠️ **Armbian en OPi6+**: NO instalar. SoC **CIX P1 CD8160** no tiene soporte en Armbian. Kernel `6.1.44-cix` es el único BSP estable.
+
 ## Conectividad internet de los workers
 
 Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade que SNAT el tráfico saliente:

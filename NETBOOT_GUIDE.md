@@ -571,3 +571,82 @@ systemctl restart k3s-agent
 > Nota de persistencia: en este entorno `/var/lib/rancher/k3s` vive en NFS root y
 > los symlinks persisten entre reinicios. Tras actualizaciones de K3s, conviene revalidar
 > que sigan apuntando a `xtables-nft-multi`.
+
+---
+
+## Optimización de tiempos de boot (verificado Abril 2026)
+
+### Tiempos medidos
+
+| Worker | Antes | Después | Mejora principal |
+|---|---|---|---|
+| worker1/2 (OPi5 RK3588) | ~3-4 min | **~2 min** | `tftpblocksize 65464` |
+| worker3 (RPi4 BCM2711) | ~2-3 min | **~1 min 10 seg** | Boot nativo EEPROM |
+| maestro (OPi6+ CIX P1) | ~23 seg | **~5-6 seg** | Mask servicios innecesarios |
+
+### boot.cmd para workers OPi5 (U-Boot SPI → TFTP)
+
+El cuello de botella histórico era el TFTP con tamaño de bloque 512 bytes por defecto:
+58MB de vmlinuz+initrd requerían ~120,000 round-trips UDP. Con `tftpblocksize 65464`
+se reducen a ~600 paquetes.
+
+```bash
+# Archivo: /mnt/ssd/netboot/tftp/workerX/boot.cmd
+setenv tftpblocksize 65464
+setenv tftpwindowsize 8
+setenv bootargs "root=/dev/nfs nfsroot=192.168.1.210:/mnt/ssd/netboot/nfs/workerX,v3,tcp,nolock,rsize=131072,wsize=131072,timeo=600 rw ip=dhcp rootwait quiet console=ttyS2,1500000"
+tftp ${kernel_addr_r} workerX/vmlinuz
+tftp ${fdt_addr_r} workerX/dtb/rockchip/rk3588s-orangepi-5.dtb
+tftp ${ramdisk_addr_r} workerX/initrd.img
+booti ${kernel_addr_r} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r}
+```
+
+Siempre regenerar `boot.scr` después de editar `boot.cmd`:
+
+```bash
+mkimage -C none -A arm64 -T script \
+  -d /mnt/ssd/netboot/tftp/workerX/boot.cmd \
+     /mnt/ssd/netboot/tftp/workerX/boot.scr
+```
+
+### Servicios masked en NFS root de workers OPi5
+
+Sin WiFi ni Bluetooth físico, estos servicios solo añaden latencia:
+
+```bash
+# Ejecutar en el maestro sobre cada NFS root
+for w in worker1 worker2; do
+  NFSROOT="/mnt/ssd/netboot/nfs/${w}/etc/systemd/system"
+  sudo ln -sf /dev/null "${NFSROOT}/bluetooth-hciattach.service"
+  sudo ln -sf /dev/null "${NFSROOT}/wpa_supplicant.service"
+  sudo ln -sf /dev/null "${NFSROOT}/ModemManager.service"
+  sudo ln -sf /dev/null "${NFSROOT}/avahi-daemon.service"
+  sudo ln -sf /dev/null "${NFSROOT}/avahi-daemon.socket"
+done
+```
+
+### NFS server threads
+
+Con 3 workers cargando a la vez, aumentar threads evita contención:
+
+```bash
+# /etc/default/nfs-kernel-server
+RPCNFSDCOUNT=16   # default era 8
+sudo systemctl restart nfs-kernel-server
+```
+
+### Maestro — servicios masked
+
+```bash
+sudo systemctl mask \
+  chrony-wait.service \
+  rtkit-daemon.service \
+  accounts-daemon.service \
+  power-profiles-daemon.service \
+  loadcpufreq.service \
+  cpufrequtils.service \
+  systemd-udev-settle.service
+```
+
+> **⚠️ Armbian en OPi6+**: No instalar. El SoC **CIX P1 CD8160** no tiene soporte en
+> Armbian. El kernel `6.1.44-cix` es el único BSP estable disponible.
