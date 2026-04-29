@@ -142,7 +142,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   rules:
     - host: registry.192.168.1.210.nip.io
       http:
