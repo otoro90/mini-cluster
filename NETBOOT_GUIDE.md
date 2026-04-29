@@ -530,6 +530,7 @@ EEPROM PXE nativo (sin SD, sin SPI flash)
 | SD no arranca U-Boot | GPT corrupta | `parted /dev/sdX mklabel msdos` |
 | **RPi 4**: Loop DISCOVER→OFFER sin REQUEST | Falta option 66 en DHCP OFFER | Añadir `dhcp-option=tag:worker3,66,192.168.1.210` |
 | **RPi 4**: No intenta TFTP | `dhcp-option bootfile-name` no rellena siaddr | Usar `dhcp-boot=tag:worker3,bootcode.bin,,192.168.1.210` |
+| **RPi 4**: dnsmasq sigue enviando IP vieja tras cambio de config | `systemctl reload` (SIGHUP) **no recarga** `dhcp-boot` ni `dhcp-option` en runtime | Usar siempre `systemctl restart dnsmasq` al cambiar opciones DHCP de siaddr/option 66 |
 | **RPi 4**: `failed sending kernel8.img` | Reintentos de negociación TFTP | Normal — buscar `sent kernel8.img` a continuación |
 | **RPi 4**: Error `file not found` para `e4834e0c/start4.elf` | RPi busca en dir de serial primero | Normal — cae al root TFTP automáticamente |
 | **RPi 4**: Interfaz de red es `end0` no `eth0` | Naming persistente de Debian/Ubuntu | Usar `end0` en comandos de red |
