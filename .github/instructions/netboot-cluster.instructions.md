@@ -6,12 +6,12 @@ applyTo: "cluster-config/**,NETBOOT_GUIDE.md,docs-clean/**"
 
 Al trabajar en archivos de netboot de este repositorio:
 
-- Preserva arquitectura real del laboratorio: maestro `192.168.1.210` + workers `.211`, `.212`, `.213`.
+- Preserva arquitectura real del laboratorio: maestro `192.168.1.210` (IP canónica estática) + workers `.211`, `.212`, `.213`.
 - No elimines la distinción de boot path:
   - OPi5: SPI U-Boot -> TFTP -> NFS
   - RPi4: EEPROM PXE nativo -> TFTP -> NFS
 - En ejemplos dnsmasq, mantén lógica por vendor class (`U-Boot` vs `PXEClient`) y tags por MAC.
-- Para RPi4, conserva explícitamente `dhcp-boot` + `option 66` para TFTP server.
+- Para RPi4 (worker3), `dhcp-boot` siaddr y `option 66` apuntan a `192.168.1.210` (IP canónica del cluster).
 - Mantén documentación en español para guías técnicas.
 - Evita cambiar IPs/MACs sin una justificación clara en el texto.
 

@@ -82,7 +82,7 @@ sudo apt install -y dnsmasq nfs-kernel-server u-boot-tools
 
 **`/etc/dnsmasq.conf`** (configuración final verificada):
 ```
-interface=eth0
+interface=enp97s0
 port=0
 log-dhcp
 
@@ -110,6 +110,7 @@ dhcp-option=tag:worker2,17,192.168.1.210:/mnt/ssd/netboot/nfs/worker2
 # Worker 3 (RPi 4) — EEPROM PXE nativo
 # dhcp-boot: fija siaddr (campo DHCP next-server) + bootfile + IP TFTP
 # option 66: TFTP server explícito (la RPi lo solicita y lo necesita)
+# Usar la IP canónica del cluster (.210) para siaddr y option 66
 dhcp-host=dc:a6:32:e9:2a:be,set:worker3,192.168.1.213,worker3
 dhcp-boot=tag:worker3,bootcode.bin,,192.168.1.210
 dhcp-option=tag:worker3,66,192.168.1.210
@@ -486,7 +487,7 @@ EEPROM PXE nativo (sin SD, sin SPI flash)
         ▼ DHCPDISCOVER (vendor: PXEClient:Arch:00000:UNDI:002001)
   dnsmasq responde (DHCPOFFER):
     IP: 192.168.1.213
-    next-server: 192.168.1.210  ← siaddr via dhcp-boot
+    next-server: 192.168.1.210  ← siaddr via dhcp-boot (IP canónica cluster)
     option 66: 192.168.1.210   ← TFTP server (OBLIGATORIO para RPi4)
     option 67: bootcode.bin
     option 60: PXEClient       ← echo para validación
@@ -648,5 +649,4 @@ sudo systemctl mask \
   systemd-udev-settle.service
 ```
 
-> **⚠️ Armbian en OPi6+**: No instalar. El SoC **CIX P1 CD8160** no tiene soporte en
-> Armbian. El kernel `6.1.44-cix` es el único BSP estable disponible.
+> ✅ **Armbian en OPi6+ COMPLETADO (Abril 2026)**: Imagen Armbian Ubuntu 24.04 Noble 26.2.1, kernel `6.18.8-current-arm64`, instalado en WD Black 512 GB NVMe. Ahora toda la red corre Armbian Noble — maestro en kernel 6.18.8, workers en 6.18.8/6.18.9. Ver [MIGRACION-ARMBIAN-OPI6PLUS.md](MIGRACION-ARMBIAN-OPI6PLUS.md).

@@ -12,7 +12,7 @@ Operador DevOps para K3s ARM netboot con foco en CI/CD GitOps, despliegue de Tra
 ### Cluster
 | Nodo | Rol | IP | Kernel |
 |------|----|-----|--------|
-| orangepi6plus | control-plane | 192.168.1.210 | 6.1.44-cix |
+| orangepi6plus | control-plane | 192.168.1.210 | Armbian Noble 26.2.1 / 6.18.8-current-arm64 |
 | worker1 | agent | 192.168.1.211 | rockchip64 (nftables, NFS root) |
 | worker2 | agent | 192.168.1.212 | rockchip64 (nftables, NFS root) |
 | worker3 | agent | 192.168.1.213 | bcm2711 (RPi4, nftables, NFS root) |
@@ -31,6 +31,7 @@ Operador DevOps para K3s ARM netboot con foco en CI/CD GitOps, despliegue de Tra
   - ⚠️ NO usar registry LAN para CI (IP `192.168.1.x` no alcanzable desde GitHub Actions)
 - **Registry local**: `registry.192.168.1.210.nip.io` — Docker Registry v2 ARM64-native (solo LAN)
 - GitOps: Argo CD + Kustomize (overlays dev/prod)
+- **ingressClass**: `traefik` (bundled K3s) — NO usar `ingress-nginx` (hostPorts ocupados por svclb-traefik)
 - **Secrets en gitops** (lab): Kustomize `secretGenerator` con `disableNameSuffixHash: true`
 
 ### Conectividad internet de workers (CRÍTICO)
@@ -40,9 +41,9 @@ Los workers NO tenían internet hasta que se aplicaron estos dos fixes:
 
 Si los workers no pueden hacer pull de imágenes, verificar ambos:
 ```bash
-# Fix 1: verificar NAT
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S systemctl status worker-nat.service --no-pager"
+# Fix 1: verificar NAT (Armbian — root sin sudo, interface enp97s0)
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'systemctl status worker-nat.service --no-pager'
 
 # Fix 2: verificar gai.conf en worker
 sshpass -p '123456' ssh root@192.168.1.211 "grep precedence /etc/gai.conf"
@@ -68,8 +69,9 @@ sshpass -p '123456' ssh root@192.168.1.211 "grep precedence /etc/gai.conf"
 
 ### 1. Estado del cluster
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S kubectl get nodes -o wide"
+# Armbian: root@192.168.1.210, kubectl sin sudo
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide'
 ```
 
 ### 2. Estado del despliegue Tramites
@@ -283,25 +285,19 @@ Acceso (requiere /etc/hosts → 192.168.1.210):
 
 ```bash
 # Sync y health de todas las apps
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c '
-    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application -n argocd \
-      -o custom-columns=\"NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status\"
-  '"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application -n argocd \
+    -o custom-columns="NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status"'
 
 # Qué recursos están OutOfSync
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c '
-    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application tramites-dev -n argocd \
-      -o jsonpath=\"{.status.resources[*]}\" | tr \"{\" \"\\n\" | grep OutOfSync
-  '"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get application tramites-dev -n argocd \
+    -o jsonpath="{.status.resources[*]}" | tr "{" "\n" | grep OutOfSync'
 
 # Hard refresh para forzar re-evaluación
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c '
-    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl annotate application tramites-dev \
-      -n argocd argocd.argoproj.io/refresh=hard --overwrite
-  '"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl annotate application tramites-dev \
+    -n argocd argocd.argoproj.io/refresh=hard --overwrite'
 ```
 > Para pull de imágenes privadas en cluster: crear `ghcr-pull-secret` en cada namespace
 > (kubectl create secret docker-registry, PAT con `read:packages`).

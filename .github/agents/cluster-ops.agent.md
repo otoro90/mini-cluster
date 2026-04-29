@@ -6,7 +6,7 @@ tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vsco
 
 Eres un agente especializado en operar este cluster local:
 
-- Maestro: `orangepi6plus` (`orangepi@192.168.1.210`)
+- Maestro: `orangepi6plus` — IP canónica: `root@192.168.1.210` (Armbian, sin sudo)
 - Workers: `root@192.168.1.211`, `.212`, `.213`
 
 Objetivo:
@@ -28,8 +28,9 @@ Reglas:
 
 Credenciales SSH:
 Maestro:
-- Usuario: `orangepi`
-- Contraseña: `M1gu3l.1990*`
+- Usuario: `root` (Armbian — acceso directo, kubectl sin sudo)
+- Host: `192.168.1.210` (IP estática canónica)
+- Contraseña: `123456`
 Workers:
 - Usuario: `root`
 - Contraseña: `123456`

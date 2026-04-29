@@ -134,20 +134,18 @@ Después del primer push:
 ### Aplicar las aplicaciones GitOps
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "cat > /tmp/argocd-apps.yaml" < manifests/tramites/argocd-apps.yaml
+# Copiar manifest al maestro y aplicar (Armbian — root sin sudo)
+sshpass -p '123456' scp manifests/tramites/argocd-apps.yaml root@192.168.1.210:/tmp/argocd-apps.yaml
 
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f /tmp/argocd-apps.yaml'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f /tmp/argocd-apps.yaml'
 ```
 
 ### Verificar sync
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get applications -n argocd'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get applications -n argocd'
 ```
 
 ---
@@ -169,16 +167,14 @@ Si el package `tramites-api` en ghcr.io es **privado**, los workers necesitan cr
 GHCR_PAT="ghp_xxxxxxxxxxxxxxxxxxxx"
 
 for NS in tramites-dev tramites-prod argocd; do
-  sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-    "echo 'M1gu3l.1990*' | sudo -S bash -c '
-      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
-      KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ghcr-pull-secret \
-        --docker-server=ghcr.io \
-        --docker-username=otoro90 \
-        --docker-password=${GHCR_PAT} \
-        -n $NS \
-        --dry-run=client -o yaml | kubectl apply -f -
-    '"
+  sshpass -p '123456' ssh root@192.168.1.210 \
+    "KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ghcr-pull-secret \
+      --docker-server=ghcr.io \
+      --docker-username=otoro90 \
+      --docker-password=${GHCR_PAT} \
+      -n $NS \
+      --dry-run=client -o yaml | kubectl apply -f -"
 done
 ```
 
@@ -192,8 +188,8 @@ done
 
 | Componente | Namespace | Helm chart | Notas |
 |-----------|-----------|------------|-------|
-| K3s v1.34.6+k3s1 | — | — | control-plane + 3 workers |
-| ingress-nginx | `ingress-nginx` | `ingress-nginx/ingress-nginx` | DaemonSet hostNetwork en orangepi6plus |
+| K3s v1.35.4+k3s1 | — | — | control-plane + 3 workers |
+| **traefik** | `kube-system` | bundled K3s | DaemonSet svclb-traefik en todos los nodos. `ingressClassName: traefik` |
 | local-path-provisioner | `local-path-storage` | `rancher/local-path-provisioner` v0.0.30 | PVCs en `/mnt/ssd/k8s-volumes`, StorageClass default |
 | Argo CD | `argocd` | `argo/argo-cd` | 7 pods, todos en orangepi6plus |
 | Docker Registry v2 | `registry` | manifest directo | `registry:2` ARM64-native |
@@ -203,7 +199,7 @@ done
 ```
 Router (192.168.1.1)
   └── LAN 192.168.1.0/24
-        ├── orangepi6plus  192.168.1.210  (maestro K3s, eth0: 192.168.1.129 internet)
+        ├── orangepi6plus  192.168.1.210  (maestro K3s, enp97s0)
         ├── worker1        192.168.1.211  (OPi5, NFS root, nftables)
         ├── worker2        192.168.1.212  (OPi5, NFS root, nftables)
         └── worker3        192.168.1.213  (RPi4B, NFS root, nftables)
@@ -211,7 +207,7 @@ Router (192.168.1.1)
 
 **NAT masquerade**: Los workers usan `192.168.1.210` como gateway. El maestro aplica
 `iptables MASQUERADE` (persistido via `worker-nat.service`) para que el tráfico
-saliente de los workers use la IP de internet del maestro (`192.168.1.129`).
+saliente de los workers use la IP del maestro (`192.168.1.210`).
 
 **DNS IPv4 preference**: Los workers tienen `/etc/gai.conf` con
 `precedence ::ffff:0:0/96  100` para priorizar IPv4 sobre IPv6 (evita timeouts en
@@ -275,9 +271,8 @@ mirrors:
 ### Estado general del cluster
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes,pods -A -o wide 2>&1 | grep -v Completed'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes,pods -A -o wide 2>&1 | grep -v Completed'
 ```
 
 ### Verificar conectividad internet desde workers
@@ -293,32 +288,29 @@ done
 ### Verificar NAT en maestro
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'iptables -t nat -L POSTROUTING -n -v | grep MASQUERADE'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'iptables -t nat -L POSTROUTING -n -v | grep MASQUERADE'
 ```
 
 ### Verificar worker-nat.service
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S systemctl status worker-nat.service --no-pager"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'systemctl status worker-nat.service --no-pager'
 ```
 
 ### Pods de Argo CD
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n argocd -o wide'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n argocd -o wide'
 ```
 
 ### Estado apps Argo CD
 
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c \
-  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get applications -n argocd'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get applications -n argocd'
 ```
 
 ### Registry local
@@ -562,9 +554,8 @@ for d in docs:
 
 Configurado con sync manual. Para desplegar:
 ```bash
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c '
-    KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl patch application tramites-prod -n argocd \
-      --type=merge -p \"{\\\"operation\\\":{\\\"sync\\\":{\\\"prune\\\":true}}}\"
-  '"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl patch application tramites-prod -n argocd \
+    --type=merge -p "{\"operation\":{\"sync\":{\"prune\":true}}}"
+'
 ```

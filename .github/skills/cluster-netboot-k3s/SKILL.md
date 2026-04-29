@@ -12,6 +12,7 @@ Aplicar un checklist operativo para diagnosticar y arreglar arranque netboot y a
 ## Procedure
 
 1. Verificar conectividad básica por IP y SSH.
+   - Maestro Armbian: `root@192.168.1.210` (IP canónica estática) — sin sudo, kubectl directo
 2. Revisar en maestro:
    - `journalctl -u dnsmasq -n 100 --no-pager`
    - `showmount -a`
@@ -25,7 +26,7 @@ Aplicar un checklist operativo para diagnosticar y arreglar arranque netboot y a
    - override systemd con snapshotter fuse + proxy nftables
    - forzar symlinks iptables a `xtables-nft-multi`
 5. Reiniciar servicio y validar en maestro con:
-   - `kubectl get nodes -o wide`
+   - `KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide`
 
 ## Expected Output
 
@@ -36,3 +37,5 @@ Aplicar un checklist operativo para diagnosticar y arreglar arranque netboot y a
 
 - En `worker3` (RPi4), revisar memory cgroups en cmdline si aparece error `failed to find memory cgroup (v2)`.
 - Tras upgrades de K3s, revalidar symlinks en `/var/lib/rancher/k3s/data/current/bin/aux/`.
+- **dnsmasq RPi4**: `dhcp-boot` siaddr y `option 66` deben ser `192.168.1.210` (IP canónica del cluster).
+- **ingressClass**: usar siempre `traefik` en los Ingress (bundled K3s, DaemonSet svclb-traefik en todos los nodos).

@@ -39,7 +39,7 @@ curl -sfL https://get.k3s.io | sh -
 Validar:
 
 ```bash
-echo 'M1gu3l.1990*' | sudo -S kubectl get nodes -o wide
+KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide
 ```
 
 Token del cluster:
@@ -111,10 +111,10 @@ Tras cambiar cmdline, reiniciar `worker3`.
 
 ## 6. Verificación del cluster
 
-Desde el maestro:
+Desde el maestro (Armbian — root, sin sudo):
 
 ```bash
-echo 'M1gu3l.1990*' | sudo -S kubectl get nodes -o wide
+KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide
 ```
 
 Estado esperado:
@@ -180,8 +180,9 @@ sudo systemctl mask \
   systemd-udev-settle.service
 ```
 
-> **⚠️ Armbian en OPi6+**: NO recomendado. El SoC es **CIX P1 CD8160** — chip propietario
-> sin soporte en Armbian. El kernel `6.1.44-cix` es el único BSP existente.
+> ✅ **Armbian en OPi6+ COMPLETADO (Abril 2026)**: El SoC CIX P1 CD8160 tiene soporte
+> oficial en Armbian desde el kernel `6.18.8-current-arm64`. Instalado en WD Black 512 GB NVMe.
+> Todo el cluster corre Armbian Noble.
 
 ### Workers OPi5 — boot.cmd optimizado
 

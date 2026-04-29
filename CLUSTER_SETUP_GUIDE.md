@@ -3,12 +3,14 @@
 Esta guía documenta el proceso de creación de un cluster ARM64 (Orange Pi 6 Plus, Orange Pi 5 y Raspberry Pi 4) utilizando arranque por red (Netboot) sin depender de discos locales en los nodos trabajadores.
 
 ## 1. Arquitectura del Cluster
-*   **Master Node:** Orange Pi 6 Plus (IP: 192.168.1.210)
-    *   Servicios: DHCP Proxy, TFTP, NFS Server.
-    *   Almacenamiento: SSD externo de 1TB montado en `/mnt/ssd`.
+*   **Master Node:** Orange Pi 6 Plus (IP: 192.168.1.210 estática)
+    *   OS: **Armbian Ubuntu 24.04 Noble 26.2.1**, kernel `6.18.8-current-arm64`
+    *   Servicios: DHCP Proxy, TFTP, NFS Server, K3s control-plane.
+    *   Almacenamiento: WD Black 512 GB NVMe montado en raíz, datos en `/mnt/ssd`.
+    *   NIC: `enp97s0` — IP estática `.210` (añadida por `add-cluster-ip.service`)
 *   **Workers:**
     *   **Worker 1:** Orange Pi 5 (IP: 192.168.1.211) - MAC: `76:86:c1:88:66:d7`
-    *   **Worker 2:** Orange Pi 5 (IP: 192.168.1.212) - MAC: `18:47:3d:fc:0f:d9`
+    *   **Worker 2:** Orange Pi 5 (IP: 192.168.1.212) - MAC: `9e:67:0e:af:20:e1`
     *   **Worker 3:** Raspberry Pi 4 (IP: 192.168.1.213) - MAC: `dc:a6:32:e9:2a:be`
 
 ---
@@ -37,20 +39,22 @@ Aplicar cambios: `sudo exportfs -ra`
 ### 2.4 Configuración de Dnsmasq (Netboot)
 Archivo `/etc/dnsmasq.conf`:
 ```text
-interface=eth0
+interface=enp97s0
 port=0
 dhcp-range=192.168.1.200,proxy
 log-dhcp
 
 # Reservas de IP y Etiquetas
 dhcp-host=76:86:c1:88:66:d7,set:worker1,192.168.1.211,worker1
-dhcp-host=18:47:3d:fc:0f:d9,set:worker2,192.168.1.212,worker2
+dhcp-host=9e:67:0e:af:20:e1,set:worker2,192.168.1.212,worker2
 dhcp-host=dc:a6:32:e9:2a:be,set:worker3,192.168.1.213,worker3
 
 # Opciones de arranque
 dhcp-option=tag:worker1,option:bootfile-name,worker1/boot.scr
 dhcp-option=tag:worker2,option:bootfile-name,worker2/boot.scr
-dhcp-option=tag:worker3,option:bootfile-name,bootcode.bin
+# RPi4: siaddr y option 66 deben ser .210 (IP canónica del cluster)
+dhcp-boot=tag:worker3,bootcode.bin,,192.168.1.210
+dhcp-option=tag:worker3,66,192.168.1.210
 
 enable-tftp
 tftp-root=/mnt/ssd/netboot/tftp

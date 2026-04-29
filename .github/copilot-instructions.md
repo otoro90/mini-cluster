@@ -8,16 +8,20 @@ Cluster Kubernetes K3s de 3 nodos ARM en red local. Los 3 workers arrancan por r
 
 | Nodo | Rol | IP | Hardware | RAM | OS / Kernel |
 |------|-----|----|----------|-----|-------------|
-| `orangepi6plus` | control-plane K3s | 192.168.1.210 | Orange Pi 6+ | 32 GB | Debian 12 / 6.1.44-cix |
+| `orangepi6plus` | control-plane K3s | 192.168.1.210 | Orange Pi 6+ | 32 GB | Armbian Noble 26.2.1 / 6.18.8-current-arm64 |
 | `worker1` | agent K3s | 192.168.1.211 | Orange Pi 5 | 4 GB | Armbian Noble / 6.18.8-current-rockchip64 |
 | `worker2` | agent K3s | 192.168.1.212 | Orange Pi 5 | 8 GB | Armbian Noble / 6.18.8-current-rockchip64 |
 | `worker3` | agent K3s | 192.168.1.213 | Raspberry Pi 4B | 8 GB | Armbian Noble / 6.18.9-current-bcm2711 |
 
 **Credenciales SSH:**
-- Maestro: `orangepi@192.168.1.210` contraseña `M1gu3l.1990*`, sudo con misma contraseña
+- Maestro (Armbian): `root@192.168.1.210` contraseña `123456` — acceso directo, kubectl sin sudo
 - Workers: `root@192.168.1.21x` contraseña `123456`
 
+> La IP `192.168.1.210` es la IP canónica del cluster (estática, añadida por `add-cluster-ip.service`). La `enp97s0` también tiene `.129` DHCP pero no se usa en comandos.
+
 **K3s token:** `K10dd8855fe8c3ed719655efdf5310fc9c868c28802825dc239ddd110feb80adfec::server:dc42591fa3eeee232aca82dd70c2e542`
+
+**K3s versión maestro:** `v1.35.4+k3s1` | **Workers:** `v1.34.6+k3s1`
 
 ## Restricciones críticas del hardware/kernel
 
@@ -32,10 +36,11 @@ Cluster Kubernetes K3s de 3 nodos ARM en red local. Los 3 workers arrancan por r
 - **PXE nativo** en EEPROM: no necesita micro-SD ni SPI flash
 - Interfaz de red: `end0` (no `eth0`)
 
-### Maestro (Orange Pi 6+)
-- Root en SSD USB — sin restricciones de overlayfs
-- `kubectl` requiere sudo: `echo 'M1gu3l.1990*' | sudo -S kubectl ...`
-- **Dos NICs**: `eth0` → 192.168.1.129 (internet), K3s NIC → 192.168.1.210 (cluster)
+### Maestro (Orange Pi 6+ — Armbian Noble 26.2.1)
+- Root en WD Black 512 GB NVMe — sin restricciones de overlayfs
+- K3s v1.35.4+k3s1, `KUBECONFIG=/etc/rancher/k3s/k3s.yaml` (como root, sin sudo)
+- **Una NIC física**: `enp97s0` — IP canónica `192.168.1.210/24` (añadida por `add-cluster-ip.service`, estática)
+- K3s iniciado con `--bind-address=192.168.1.210 --advertise-address=192.168.1.210 --node-ip=192.168.1.210 --flannel-iface=enp97s0`
 
 ## Configuración Netboot
 
@@ -45,10 +50,10 @@ Cluster Kubernetes K3s de 3 nodos ARM en red local. Los 3 workers arrancan por r
 - Workers OPi5: botan SPI Flash → U-Boot → TFTP → NFS
 - Worker RPi4: EEPROM PXE nativo → TFTP → NFS (requiere DHCP option 66 + dhcp-boot para siaddr)
 
-**Tiempos de boot tras optimización (Abril 2026):**
+**Tiempos de boot (Abril 2026):**
 - Workers OPi5 (worker1/2): **~2 min** (antes 3-4 min)
 - Worker RPi4 (worker3): **~1 min 10 seg**
-- Maestro OPi6+: **~5-6 seg** (antes 23 seg — tras mask de servicios desktop)
+- Maestro OPi6+ Armbian: **~10-15 seg** (sin servicios desktop, Armbian minimal)
 
 **Optimizaciones aplicadas (permanentes en disco/NFS root):**
 - `tftpblocksize 65464` + `tftpwindowsize 8` en `boot.cmd` de OPi5 (mayor impacto)
@@ -57,14 +62,14 @@ Cluster Kubernetes K3s de 3 nodos ARM en red local. Los 3 workers arrancan por r
 - Masked en workers: `bluetooth-hciattach`, `wpa_supplicant`, `avahi-daemon`
 - Masked en maestro: `chrony-wait`, `rtkit-daemon`, `accounts-daemon`, `power-profiles-daemon`, `loadcpufreq`, `cpufrequtils`, `systemd-udev-settle`
 
-> ⚠️ **Armbian en OPi6+**: NO instalar. SoC **CIX P1 CD8160** no tiene soporte en Armbian. Kernel `6.1.44-cix` es el único BSP estable.
+> ✅ **Armbian en OPi6+ COMPLETADO (Abril 2026)**: Imagen Armbian Ubuntu 24.04 Noble 26.2.1, kernel `6.18.8-current-arm64`, instalado en WD Black 512 GB NVMe. Ver [MIGRACION-ARMBIAN-OPI6PLUS.md](../MIGRACION-ARMBIAN-OPI6PLUS.md) para detalle.
 
 ## Conectividad internet de los workers
 
 Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade que SNAT el tráfico saliente:
 
 - **Servicio**: `worker-nat.service` (systemd, enabled + running en maestro)
-- **Regla**: `iptables -t nat -A POSTROUTING -s 192.168.1.0/24 -o eth0 -j MASQUERADE`
+- **Regla**: `iptables -t nat -A POSTROUTING -s 192.168.1.0/24 -o enp97s0 -j MASQUERADE`
 - **DNS IPv4**: `/etc/gai.conf` con `precedence ::ffff:0:0/96  100` en cada worker (NFS root persistido)
 - **Verificar**: `systemctl status worker-nat.service` en maestro
 
@@ -76,8 +81,10 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 |-----------|--------------|--------------|-------|
 | Argo CD v3.3.8 | `http://argocd.local` (añadir a `/etc/hosts`) | admin / `ipb4EnoshkInEr4g` | Helm `argo/argo-cd`, todos los pods en orangepi6plus |
 | Docker Registry v2 | `http://registry.192.168.1.210.nip.io` | admin / Registry12345 | Solo LAN — ARM64-native (`registry:2`) |
-| ingress-nginx | `192.168.1.210:80/443` | — | DaemonSet hostNetwork en orangepi6plus |
+| **traefik** | `192.168.1.210:80/443` | — | Bundled K3s, DaemonSet svclb-traefik en todos los nodos. `ingressClassName: traefik` |
 | local-path-provisioner | StorageClass `local-path` (default) | — | PVCs en `/mnt/ssd/k8s-volumes` en orangepi6plus |
+
+> ⚠️ NO usar ingress-nginx: hostPorts 80/443 los ocupa svclb-traefik en todos los nodos → ingress-nginx queda Pending.
 
 **Imágenes CI/CD** (GitHub Container Registry — ARM64, alcanzable desde workers vía internet):
 - Backend API: `ghcr.io/otoro90/tramites-api`
@@ -214,9 +221,9 @@ Tramites/gitops/
 ## Comandos frecuentes
 
 ```bash
-# Ver estado del cluster
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide'"
+# Ver estado del cluster (maestro Armbian — root directo, sin sudo)
+sshpass -p '123456' ssh -o StrictHostKeyChecking=no root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get nodes -o wide'
 
 # Logs de un worker
 sshpass -p '123456' ssh root@192.168.1.211 "journalctl -u k3s-agent -n 30 --no-pager"
@@ -225,23 +232,22 @@ sshpass -p '123456' ssh root@192.168.1.211 "journalctl -u k3s-agent -n 30 --no-p
 sshpass -p '123456' ssh root@192.168.1.211 "systemctl restart k3s-agent"
 
 # Monitorear arranque netboot
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 "sudo journalctl -u dnsmasq -f"
+sshpass -p '123456' ssh root@192.168.1.210 "journalctl -u dnsmasq -f"
 
 # Verificar NAT workers
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S iptables -t nat -L POSTROUTING -n -v | grep MASQUERADE"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'iptables -t nat -L POSTROUTING -n -v | grep MASQUERADE'
 
 # Ver todos los pods
-sshpass -p 'M1gu3l.1990*' ssh orangepi@192.168.1.210 \
-  "echo 'M1gu3l.1990*' | sudo -S bash -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -A -o wide'"
+sshpass -p '123456' ssh root@192.168.1.210 \
+  'KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -A -o wide'
 ```
 
 ## Helm (en maestro)
 
-- Binario: `/usr/local/bin/helm` (v3.17.3)
-- Todas las operaciones necesitan sudo y `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`
-- Patrón: `echo 'M1gu3l.1990*' | sudo -S bash -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm ...'`
-- Repos añadidos: `argo` (https://argoproj.github.io/argo-helm), `harbor` (https://helm.goharbor.io), `ingress-nginx`
+- Binario: `/usr/local/bin/helm` (v3.20.2)
+- Armbian: usuario root → sin sudo. Patrón: `KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm ...`
+- Repos añadidos: `argo` (https://argoproj.github.io/argo-helm), `harbor` (https://helm.goharbor.io)
 
 ## Convenciones del repo
 
