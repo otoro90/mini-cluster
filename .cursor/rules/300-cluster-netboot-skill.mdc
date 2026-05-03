@@ -1,0 +1,13 @@
+---
+description: Checklist y skill para diagnosticar Netboot y K3s.
+globs: scripts/install/**, scripts/deploy/**, manifests/**
+---
+# Skill: Cluster Netboot + K3s
+
+## Procedimiento de Diagnóstico Netboot
+Si hay un fallo en el arranque de un nodo:
+1. Maestro: Revisa `journalctl -u dnsmasq -n 100 --no-pager` y `showmount -a`.
+2. Worker: Revisa `cat /proc/cmdline`, `df -h /`, `systemctl status k3s-agent`.
+3. Worker3 (RPi4): `dhcp-boot` siaddr y `option 66` en dnsmasq deben apuntar a `192.168.1.210`.
+
+Tras actualizaciones, siempre valida que los symlinks `/var/lib/rancher/k3s/data/current/bin/aux/iptables` apunten a `xtables-nft-multi`.

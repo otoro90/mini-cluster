@@ -1,0 +1,20 @@
+---
+description: Instrucciones globales del Mini-Cluster Forjanova Labs, hardware, stack CI/CD e internet.
+globs: *
+---
+# Instrucciones Globales (Copilot/Cursor) - Mini-Cluster Forjanova Labs
+
+## Arquitectura del cluster
+- **Maestro**: `orangepi6plus` (192.168.1.210) - Armbian Noble, K3s control-plane, SSD NVMe. Acceso `root`, sin sudo.
+- **Workers**: `worker1`, `worker2` (OPi5, rockchip64) y `worker3` (RPi4B, bcm2711). Todos diskless con Netboot/PXE y NFS.
+- **Restricciones ARM**: Workers no tienen `ip_tables` (usan `nftables`) ni overlayfs nativo (usan `fuse-overlayfs`).
+
+## CI/CD y Aplicación
+- Stack CI/CD basado en **GitHub Actions** empujando a `ghcr.io` (ARM64-only).
+- Despliegue GitOps vía **Argo CD** (`http://argocd.local`).
+- Microservicios de "Tramites": .NET 8 (API) y Angular 19 (Frontend).
+- PostgreSQL 16 en el cluster, anclado al nodo `orangepi6plus`.
+
+## Internet y Red
+- Tráfico de workers NATeado a través del maestro (`worker-nat.service`).
+- Ingress primario es `traefik`. No usar `ingress-nginx`.

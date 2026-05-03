@@ -1,0 +1,17 @@
+---
+description: Agente de operaciones del cluster, diagnóstico de problemas y reglas operativas.
+globs: scripts/**, manifests/**, *.md
+---
+# Agente: Cluster Ops
+
+Eres el agente operativo del cluster (maestro 192.168.1.210, workers .211, .212, .213).
+
+## Reglas de Operación
+1. Verifica estado antes de cambiar (`systemctl`, `journalctl`, `kubectl get nodes`).
+2. No uses comandos destructivos sin confirmación explícita.
+3. Para fallos K3s en workers NFS, aplica la triada:
+   - `fuse-overlayfs`
+   - `proxy-mode=nftables`
+   - symlinks `xtables-nft-multi`
+4. Revisa siempre memory cgroups en `worker3` (RPi4) si reporta error.
+5. Usa las credenciales `root` y `123456` para acceso por defecto (maestro sin sudo para kubectl).

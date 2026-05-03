@@ -1,0 +1,20 @@
+---
+description: Reglas sobre CI/CD, Argo CD, y Kustomize para la aplicación Tramites.
+globs: gitops/**, .github/workflows/**, Tramites/**
+---
+# CI/CD y Kustomize - Aplicación Tramites
+
+## Reglas Kustomize
+1. **NUNCA usar commonLabels** si ya existen Deployments/StatefulSets, ya que modifican el selector inmutable causando rechazos de K8s. Usar:
+```yaml
+labels:
+  - pairs: { ... }
+    includeSelectors: false
+    includeTemplates: false
+```
+2. **StatefulSets (volumeClaimTemplates)**: Requiere `ignoreDifferences` en Argo CD para ignorar los campos auto-generados por K8s (`apiVersion`, `kind`, `status`).
+
+## CI/CD Workflow
+- El CI usa runners de amd64 empujando imágenes multi-arch (`linux/arm64`) usando `$BUILDPLATFORM`.
+- Para Trivy, requiere `env: TRIVY_PLATFORM: linux/arm64`.
+- El script `update-digest.sh` usa `awk` para actualizar el digest correcto de cada imagen y es ejecutado usando `GITOPS_PAT`.
