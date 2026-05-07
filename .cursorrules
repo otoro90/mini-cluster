@@ -12,7 +12,7 @@ Este repositorio contiene configuraciones, manifiestos y guías para operar un c
 - **Provisión de Nodos:** Netbooting / PXE (dnsmasq, tftpd-hpa, nfs-kernel-server).
 - **Almacenamiento:** NFS, Longhorn.
 - **CI/CD:** GitHub Actions (Self-hosted runners en K3s).
-- **Ingress y Red:** NGINX Ingress, Cloudflare Tunnels (cloudflared), MetalLB.
+- **Ingress y Red:** Traefik (único Ingress Controller), Cloudflare Tunnels (cloudflared para exponer Front y API al Internet público).
 - **Microservicios (Ejemplos locales):** Tramites API (.NET Core), Frontend Angular.
 - **Gestión de Identidad:** Zitadel / Keycloak.
 
@@ -45,6 +45,7 @@ Este repositorio contiene configuraciones, manifiestos y guías para operar un c
 - Recuerda que estamos sobre arquitectura **ARM64**. Siempre valida que las imágenes de Docker (ej. Docker Hub/GHCR) tengan soporte `linux/arm64`.
 - El Master Node maneja servicios críticos (DNS, DHCP, NFS). Los Worker Nodes arrancan por red (diskless).
 - Cualquier cambio en el sistema de archivos raíz exportado por NFS debe realizarse desde el Master Node.
+- **Exposición a Internet y Seguridad:** El Frontend y la API están expuestos al internet público vía Cloudflare Tunnels mapeados a servicios internos. Servicios de administración e infraestructura (como **ArgoCD** y **Registry**) NO se exponen a internet; se accede a ellos exclusivamente por VPN para colaboradores.
 
 ## 🗣 Tono y Comunicación
 - Comunícate de forma clara, técnica, estructurada y en **Español**, a menos que se te pida lo contrario.
