@@ -1,0 +1,59 @@
+zitadel:
+  masterkeySecretName: zitadel-masterkey
+  configmapConfig:
+    ExternalSecure: false
+    ExternalDomain: zitadel.192.168.1.210.nip.io
+
+env:
+  - name: ZITADEL_DATABASE_POSTGRES_DSN
+    value: host=zitadel-postgresql port=5432 user=postgres password=zitadel_pg_admin_ChangeMe_2026 dbname=postgres sslmode=disable
+
+replicaCount: 1
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1500m
+    memory: 2Gi
+
+nodeSelector:
+  kubernetes.io/hostname: orangepi6plus
+
+tolerations:
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+  hosts:
+    - host: zitadel.192.168.1.210.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+login:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/hostname: orangepi6plus
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+  ingress:
+    enabled: true
+    className: traefik
+    annotations: {}
+    hosts:
+      - host: zitadel.192.168.1.210.nip.io
+        paths:
+          - path: /ui/v2/login
+            pathType: Prefix
+    tls: []
+
+postgresql:
+  enabled: false

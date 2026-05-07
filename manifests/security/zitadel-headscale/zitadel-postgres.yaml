@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zitadel
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: zitadel-postgres-admin
+  namespace: zitadel
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: zitadel_pg_admin_ChangeMe_2026
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zitadel-postgresql
+  namespace: zitadel
+  labels:
+    app: zitadel-postgresql
+spec:
+  serviceName: zitadel-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zitadel-postgresql
+  template:
+    metadata:
+      labels:
+        app: zitadel-postgresql
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: orangepi6plus
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-postgres-admin
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: postgres
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "postgres"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+              ephemeral-storage: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zitadel-postgresql
+  namespace: zitadel
+spec:
+  selector:
+    app: zitadel-postgresql
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
