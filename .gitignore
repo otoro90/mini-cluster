@@ -28,3 +28,8 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Secretos locales (NUNCA subir)
+secrets.env
+*.secrets.env
+.secrets

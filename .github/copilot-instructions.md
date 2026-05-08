@@ -84,6 +84,149 @@ Los workers usan `192.168.1.210` como gateway. El maestro tiene NAT masquerade q
 | **traefik** | `192.168.1.210:80/443` | — | Bundled K3s, DaemonSet svclb-traefik en todos los nodos. `ingressClassName: traefik` |
 | local-path-provisioner | StorageClass `local-path` (default) | — | PVCs en `/mnt/ssd/k8s-volumes` en orangepi6plus |
 
+## Stack Seguridad (Mayo 2026)
+
+| Componente | URL LAN | Namespace | Notas |
+|-----------|---------|-----------|-------|
+| ZITADEL v4.13.1 (IdP) | `http://zitadel.192.168.1.210.nip.io` | `zitadel` | Helm `zitadel/zitadel`, PostgreSQL externo dedicado |
+| Headscale v0.27.0 (VPN) | `http://headscale.192.168.1.210.nip.io` | `headscale` | SQLite sobre PVC local-path, DERP embebido |
+| STUN Headscale | `192.168.1.210:30478/udp` | headscale | NodePort UDP 30478 |
+
+**URLs públicas por Cloudflare Tunnel:**
+- ZITADEL/Auth: `https://auth.forjanova.com`
+- VPN Control URL: `https://vpn.forjanova.com`
+
+**Arquitectura desplegada:**
+- ZITADEL con PostgreSQL dedicado externo (`zitadel-postgresql` StatefulSet, `postgres:16-alpine`)
+- Masterkey en K8s secret `zitadel-masterkey` (namespace `zitadel`) — **nunca en Git**
+- Ambos pods fijados a `orangepi6plus` (SSD NVMe, sin restricciones overlayfs)
+- Ingress via Traefik (`ingressClassName: traefik`)
+- DERP embebido habilitado en Headscale, región 999 `forjanova`
+
+**Manifests:**
+- `manifests/security/zitadel-headscale/zitadel-postgres.yaml` — PostgreSQL + secrets
+- `manifests/security/zitadel-headscale/zitadel-values.yaml` — Helm values ZITADEL
+- `manifests/security/zitadel-headscale/headscale.yaml` — Headscale completo
+- `scripts/deploy/deploy-zitadel-headscale.sh` — script de despliegue remoto
+
+**Despliegue/redepliegue:**
+```bash
+# Limpieza previa si ya existe:
+sshpass -p '123456' ssh root@192.168.1.210 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm -n zitadel uninstall zitadel || true'
+
+# Despliegue completo:
+./scripts/deploy/deploy-zitadel-headscale.sh
+```
+
+**Lección crítica (Mayo 2026):** ZITADEL Helm chart usa pre-install hooks (`zitadel-init`, `zitadel-setup`). Si la DB no existe al iniciar el hook, falla con `DeadlineExceeded`. Solución: PostgreSQL externo precreado con nombre `zitadel-postgresql`, DSN pasado por `env:` a nivel raíz de values (`postgresql.enabled: false` en subchart).
+
+**Recuperar masterkey:**
+```bash
+sshpass -p '123456' ssh root@192.168.1.210 \
+  "KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n zitadel get secret zitadel-masterkey -o jsonpath='{.data.masterkey}' | base64 -d"
+```
+
+**OIDC Fase 2 — Headscale → ZITADEL** (CONFIGURADO Y OPERATIVO Mayo 2026):
+
+El OIDC está operativo. La configuración vive en el runtime del cluster:
+- ConfigMap: `headscale-config` (namespace `headscale`)
+- Secret: `headscale-oidc-credentials` (namespace `headscale`)
+
+Config OIDC runtime activa:
+```yaml
+oidc:
+  only_start_if_oidc_is_available: true
+  issuer: https://auth.forjanova.com   # ← DEBE ser https (lo que devuelve ZITADEL discovery)
+  client_id: 371944937371009137
+  client_secret: <en secret headscale-oidc-credentials>
+  scope: [openid, profile, email]
+  allowed_domains: [forjanova.com]
+  allowed_groups: []
+  allowed_users: [admin@forjanova.com]
+```
+
+> ⚠️ `manifests/security/zitadel-headscale/headscale.yaml` tiene el bloque OIDC comentado.
+> Si se re-aplica el manifest tal cual, se perderá la config OIDC del runtime.
+> Re-ejecutar `./scripts/setup-zitadel-oidc-headscale.sh` o aplicar config manualmente.
+
+> ⚠️ `setup-zitadel-oidc-headscale.sh` actualmente roto (HTTP 500 en token exchange).
+> Usar el PAT directo para API calls ZITADEL.
+
+**Gestión del allowlist OIDC de Headscale:**
+```bash
+# Agregar/reemplazar usuarios permitidos (script idempotente)
+./scripts/deploy/set-headscale-oidc-allowlist.sh admin@forjanova.com user2@forjanova.com
+# El script edita el ConfigMap headscale-config y hace rollout del deployment
+```
+
+**Importante Headscale v0.27.0:**
+- La clave `oidc.strip_email_domain` fue removida y rompe startup con `FATAL`.
+- No incluir esa clave en `headscale-config`.
+- El issuer OIDC DEBE ser `https://auth.forjanova.com` (HTTPS), no HTTP. ZITADEL retorna
+  HTTPS en su discovery endpoint y Headscale valida que coincida exactamente.
+
+**Accesos ZITADEL:**
+
+| Tipo | Valor |
+|------|-------|
+| Console | `https://auth.forjanova.com/ui/console` |
+| Login UI | `https://auth.forjanova.com/ui/login` |
+| Admin humano | `admin@forjanova.com` / `ForjaNovaAdmin!2026` (cambiar en primer login) |
+| IAM admin PAT | Secret `iam-admin-pat` en namespace `zitadel` |
+
+```bash
+# Ver PAT admin (para llamadas API)
+sshpass -p '123456' ssh root@192.168.1.210 \
+  "KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n zitadel get secret iam-admin-pat -o jsonpath='{.data.pat}' | base64 -d"
+
+# Ejemplo: listar usuarios vía API con PAT
+PAT=$(sshpass -p '123456' ssh root@192.168.1.210 \
+  "KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl -n zitadel get secret iam-admin-pat -o jsonpath='{.data.pat}' | base64 -d")
+curl -s -H "Authorization: Bearer $PAT" https://auth.forjanova.com/v2/users | jq .
+```
+
+**Conectar cliente Tailscale/Headscale:**
+```bash
+# ⚠️ NO usar `defaults write` — no afecta al daemon ya en ejecución
+
+# Opción 1: via preauth key (sin OIDC, para bootstrap)
+# 1. Crear usuario en headscale: kubectl exec -n headscale <pod> -- headscale users create oscar
+# 2. Generar key: kubectl exec -n headscale <pod> -- headscale preauthkeys create --user oscar --expiration 1h
+# 3. Conectar: tailscale up --reset --login-server=https://vpn.forjanova.com --auth-key=<key>
+
+# Opción 2: via OIDC (flujo browser)
+tailscale up --reset --login-server=https://vpn.forjanova.com --force-reauth
+# Se abrirá browser → https://auth.forjanova.com/ui/login → login con admin@forjanova.com
+```
+
+**Lecciones críticas OIDC/VPN (Mayo 2026):**
+- `defaults write io.tailscale.ipn.macos ControlURL` NO cambia el daemon en ejecución. Usar `tailscale up --reset`.
+- El issuer Headscale DEBE coincidir EXACTAMENTE con el que retorna `https://auth.forjanova.com/.well-known/openid-configuration` (campo `issuer`). Si difiere (http vs https), Headscale crashea con `FTL`.
+- Routear `vpn.forjanova.com` a través de Nginx portal rompe TS2021 (doble proxy + Cloudflare). El ingress de `vpn.forjanova.com` debe apuntar directamente al service `headscale` (puerto 80), no al portal.
+- `vpn.forjanova.com` en raíz devuelve 404 (Headscale no tiene root handler) — esto es normal. El portal vive en `headscale.192.168.1.210.nip.io`.
+
+## Gestión de secretos
+
+**Estrategia recomendada:** un único punto de entrada = **Bitwarden** (bitwarden.com — tier free o auto-hospedado como Vaultwarden).
+
+Flujo de trabajo:
+1. Copia `secrets.env.example` → `secrets.env` (está en `.gitignore`, nunca en Git)
+2. Rellena los valores en `secrets.env` con los secretos reales
+3. Guarda los mismos valores en **Bitwarden** (colección "mini-cluster / forjanova")
+4. Antes de ejecutar scripts: `source ./secrets.env`
+5. Los K8s secrets del cluster son la fuente de verdad en runtime — Bitwarden es el backup
+
+**Secretos clave por servicio:**
+| Servicio | K8s secret | Clave en Bitwarden |
+|---------|-----------|-------------------|
+| SSH cluster | — | "SSH root 192.168.1.210" |
+| ZITADEL PostgreSQL | `zitadel-postgres-admin` (ns: zitadel) | "ZITADEL PG admin password" |
+| ZITADEL masterkey | `zitadel-masterkey` (ns: zitadel) | "ZITADEL masterkey" |
+| Headscale OIDC | `headscale-oidc-credentials` (ns: headscale) | "Headscale OIDC credentials" |
+| Argo CD admin | `argocd-initial-admin-secret` (ns: argocd) | "ArgoCD admin password" |
+
+> ⚠️ **NUNCA** subir `secrets.env` ni valores reales de secrets a Git. El archivo `secrets.env.example` es solo una plantilla.
+
 > ⚠️ NO usar ingress-nginx: hostPorts 80/443 los ocupa svclb-traefik en todos los nodos → ingress-nginx queda Pending.
 
 **Imágenes CI/CD** (GitHub Container Registry — ARM64, alcanzable desde workers vía internet):
@@ -217,6 +360,7 @@ Tramites/gitops/
 192.168.1.210  tramites.forjanova.local tramites-api.forjanova.local
 192.168.1.210  argocd.local registry.192.168.1.210.nip.io
 ```
+> nip.io resuelve automáticamente: `zitadel.192.168.1.210.nip.io` → `192.168.1.210` (no necesita /etc/hosts)
 
 ## Comandos frecuentes
 
@@ -247,7 +391,7 @@ sshpass -p '123456' ssh root@192.168.1.210 \
 
 - Binario: `/usr/local/bin/helm` (v3.20.2)
 - Armbian: usuario root → sin sudo. Patrón: `KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm ...`
-- Repos añadidos: `argo` (https://argoproj.github.io/argo-helm), `harbor` (https://helm.goharbor.io)
+- Repos añadidos: `argo` (https://argoproj.github.io/argo-helm), `harbor` (https://helm.goharbor.io), `zitadel` (https://charts.zitadel.com)
 
 ## Convenciones del repo
 

@@ -10,7 +10,7 @@ metadata:
   namespace: headscale
 data:
   config.yaml: |
-    server_url: http://headscale.192.168.1.210.nip.io
+    server_url: https://vpn.forjanova.com
     listen_addr: 0.0.0.0:8080
     metrics_listen_addr: 0.0.0.0:9090
     grpc_listen_addr: 0.0.0.0:50443
@@ -57,6 +57,27 @@ data:
 
     policy:
       mode: database
+
+    # OIDC (Fase 2): este manifest base NO conserva secretos OIDC.
+    # Tras aplicar cambios en headscale.yaml, re-ejecuta:
+    #   ./scripts/setup-zitadel-oidc-headscale.sh
+    # Recomendacion de seguridad:
+    # - usar allowlist de usuarios con:
+    #   ./scripts/deploy/set-headscale-oidc-allowlist.sh usuario1@dominio usuario2@dominio
+    # oidc:
+    #   only_start_if_oidc_is_available: true
+    #   issuer: https://auth.forjanova.com
+    #   client_id: REPLACE_ME
+    #   client_secret: REPLACE_ME
+    #   scope:
+    #     - openid
+    #     - profile
+    #     - email
+    #   extra_params: {}
+    #   allowed_domains: []
+    #   allowed_groups: []
+    #   allowed_users:
+    #     - admin@forjanova.com
 
     log:
       format: text
@@ -186,6 +207,281 @@ spec:
       targetPort: 3478
       nodePort: 30478
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: headscale-portal-config
+  namespace: headscale
+data:
+  default.conf: |
+    map $http_upgrade $connection_upgrade {
+      default upgrade;
+      ''      close;
+    }
+
+    server {
+      listen 8080;
+      server_name _;
+      root /usr/share/nginx/html;
+
+      location = /healthz {
+        return 200 'ok';
+      }
+
+      location = / {
+        try_files /index.html =404;
+      }
+
+      location / {
+        proxy_pass http://headscale.headscale.svc.cluster.local:80;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>Forjanova VPN</title>
+      <style>
+        :root {
+          --bg: #071022;
+          --panel: #0f1f3f;
+          --panel-2: #142b55;
+          --text: #e7f0ff;
+          --muted: #b8c7ea;
+          --accent: #3eb0ff;
+          --accent-2: #5be0c9;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+          color: var(--text);
+          background:
+            radial-gradient(900px 480px at 15% -10%, rgba(62, 176, 255, 0.25), transparent 65%),
+            radial-gradient(700px 420px at 85% 0%, rgba(91, 224, 201, 0.2), transparent 60%),
+            linear-gradient(160deg, #060d1b, var(--bg));
+          min-height: 100vh;
+          display: grid;
+          place-items: center;
+        }
+        .card {
+          width: min(920px, 92vw);
+          border-radius: 22px;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: linear-gradient(180deg, rgba(15,31,63,0.9), rgba(9,19,39,0.92));
+          box-shadow: 0 28px 70px rgba(0,0,0,0.42);
+          padding: 28px;
+        }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(62,176,255,0.14);
+          border: 1px solid rgba(62,176,255,0.5);
+          color: #cfe9ff;
+          border-radius: 999px;
+          padding: 7px 12px;
+          font-size: 13px;
+        }
+        h1 {
+          margin: 14px 0 8px;
+          font-size: clamp(28px, 4vw, 40px);
+          line-height: 1.08;
+        }
+        p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 16px;
+          line-height: 1.5;
+        }
+        .grid {
+          margin-top: 24px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        .panel {
+          background: linear-gradient(180deg, var(--panel), var(--panel-2));
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 16px;
+          padding: 16px;
+        }
+        .panel h2 {
+          margin: 0 0 8px;
+          font-size: 18px;
+        }
+        ol {
+          margin: 0;
+          padding-left: 20px;
+          color: var(--muted);
+        }
+        li { margin: 6px 0; }
+        code {
+          background: rgba(0,0,0,0.35);
+          border-radius: 7px;
+          padding: 2px 6px;
+          color: #d5e6ff;
+        }
+        .actions {
+          margin-top: 20px;
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .btn {
+          appearance: none;
+          border: 0;
+          border-radius: 10px;
+          padding: 12px 16px;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: transform .15s ease, filter .2s ease;
+        }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+        .primary {
+          color: #02152f;
+          background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        }
+        .ghost {
+          color: var(--text);
+          border: 1px solid rgba(255,255,255,0.22);
+          background: rgba(255,255,255,0.06);
+        }
+        @media (max-width: 780px) {
+          .grid { grid-template-columns: 1fr; }
+        }
+      </style>
+    </head>
+    <body>
+      <main class="card">
+        <span class="badge">Forjanova Labs · Headscale + ZITADEL OIDC</span>
+        <h1>Portal VPN privado</h1>
+        <p>
+          Esta URL controla el login de tu red Tailscale autohospedada.
+          La conexión se inicia desde la app de Tailscale, no desde navegador directo.
+        </p>
+
+        <section class="grid">
+          <article class="panel">
+            <h2>1) Registrar dispositivo</h2>
+            <ol>
+              <li>En macOS corre:<br><code>defaults write io.tailscale.ipn.macos ControlURL https://vpn.forjanova.com</code></li>
+              <li>Luego inicia sesión en Tailscale y conéctate.</li>
+              <li>Se abrirá autenticación en ZITADEL.</li>
+            </ol>
+          </article>
+          <article class="panel">
+            <h2>2) Administración</h2>
+            <ol>
+              <li>Consola IdP: <code>https://auth.forjanova.com/ui/console</code></li>
+              <li>Login UI: <code>https://auth.forjanova.com/ui/login</code></li>
+              <li>Crea usuarios/roles y vuelve a intentar conexión.</li>
+            </ol>
+          </article>
+        </section>
+
+        <div class="actions">
+          <a class="btn primary" href="https://auth.forjanova.com/ui/login" target="_blank" rel="noopener noreferrer">Abrir Login ZITADEL</a>
+          <a class="btn ghost" href="https://auth.forjanova.com/ui/console" target="_blank" rel="noopener noreferrer">Abrir Consola ZITADEL</a>
+        </div>
+      </main>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headscale-portal
+  namespace: headscale
+  labels:
+    app: headscale-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headscale-portal
+  template:
+    metadata:
+      labels:
+        app: headscale-portal
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: orangepi6plus
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+              ephemeral-storage: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+          volumeMounts:
+            - name: portal-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: portal-config
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+              readOnly: true
+      volumes:
+        - name: portal-config
+          configMap:
+            name: headscale-portal-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headscale-portal
+  namespace: headscale
+spec:
+  selector:
+    app: headscale-portal
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -195,6 +491,16 @@ spec:
   ingressClassName: traefik
   rules:
     - host: headscale.192.168.1.210.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: headscale-portal
+                port:
+                  number: 80
+    - host: vpn.forjanova.com
       http:
         paths:
           - path: /

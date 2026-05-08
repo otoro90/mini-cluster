@@ -13,6 +13,38 @@ stringData:
   # Paste the token from Cloudflare Zero Trust > Networks > Tunnels
   token: "REPLACE_WITH_TUNNEL_TOKEN"
 ---
+# =============================================================================
+# Rutas del tunnel — configurar en Cloudflare Zero Trust Dashboard
+# Ruta: Zero Trust > Networks > Tunnels > <tu-tunnel> > Configure > Public Hostnames
+#
+# Servicio          | Hostname público               | Internal URL
+# ------------------|-------------------------------|----------------------------------
+# ZITADEL (IdP)     | auth.forjanova.com            | http://192.168.1.210:80
+# Headscale (VPN)   | vpn.forjanova.com             | http://192.168.1.210:80
+# Argo CD           | argocd.<tu-dominio.com>       | http://192.168.1.210:80
+# Tramites (prod)   | tramites.<tu-dominio.com>     | http://192.168.1.210:80
+#
+# IMPORTANTE — Host Headers:
+# Traefik usa name-based routing. El tunnel debe enviar el hostname correcto.
+# En Zero Trust: Additional application settings > HTTP Settings > HTTP Host Header
+#   auth:      auth.forjanova.com
+#   vpn:       vpn.forjanova.com
+#   argocd:    argocd.local
+#   tramites:  tramites.forjanova.local
+#
+# ZITADEL necesita conocer su URL pública HTTPS para OIDC. Tras activar el tunnel:
+#   ./scripts/update-zitadel-domain.sh https://zitadel.<tu-dominio.com>
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-info
+  namespace: cloudflare-tunnel
+data:
+  README: |
+    Configure public hostnames in Cloudflare Zero Trust Dashboard.
+    After activating: run scripts/update-zitadel-domain.sh with the HTTPS domain.
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

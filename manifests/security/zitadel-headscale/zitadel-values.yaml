@@ -1,8 +1,8 @@
 zitadel:
   masterkeySecretName: zitadel-masterkey
   configmapConfig:
-    ExternalSecure: false
-    ExternalDomain: zitadel.192.168.1.210.nip.io
+    ExternalSecure: true
+    ExternalDomain: auth.forjanova.com
 
 env:
   - name: ZITADEL_DATABASE_POSTGRES_DSN
@@ -34,6 +34,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    - host: auth.forjanova.com
+      paths:
+        - path: /
+          pathType: Prefix
   tls: []
 
 login:
@@ -50,6 +54,10 @@ login:
     annotations: {}
     hosts:
       - host: zitadel.192.168.1.210.nip.io
+        paths:
+          - path: /ui/v2/login
+            pathType: Prefix
+      - host: auth.forjanova.com
         paths:
           - path: /ui/v2/login
             pathType: Prefix
